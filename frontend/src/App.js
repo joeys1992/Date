@@ -362,13 +362,27 @@ const ProfileSetupView = ({ token, currentUser, onComplete }) => {
                       accept="image/*"
                       onChange={handlePhotoUpload}
                       className="hidden"
+                      disabled={loading}
                     />
                     <div className="text-center">
-                      <div className="text-3xl text-gray-400 mb-2">+</div>
-                      <div className="text-sm text-gray-500">Add Photo</div>
+                      {loading ? (
+                        <div className="text-2xl">⏳</div>
+                      ) : (
+                        <>
+                          <div className="text-3xl text-gray-400 mb-2">+</div>
+                          <div className="text-sm text-gray-500">Add Photo</div>
+                        </>
+                      )}
                     </div>
                   </label>
                 )}
+              </div>
+
+              {/* Debug info */}
+              <div className="mb-4 p-3 bg-gray-50 rounded-lg text-sm">
+                <p>Photos uploaded: {photos.length} / 3 required</p>
+                {loading && <p className="text-blue-600">Uploading photo...</p>}
+                {error && <p className="text-red-600">Error: {error}</p>}
               </div>
 
               {photos.length >= 3 && (
