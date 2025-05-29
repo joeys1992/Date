@@ -252,7 +252,7 @@ async def upload_photo(
 ):
     """Upload a profile photo"""
     # Validate file type
-    if not file.content_type.startswith("image/"):
+    if not file.content_type or not file.content_type.startswith("image/"):
         raise HTTPException(status_code=400, detail="File must be an image")
     
     # Read and validate image
@@ -260,16 +260,27 @@ async def upload_photo(
     if len(contents) > 5 * 1024 * 1024:  # 5MB limit
         raise HTTPException(status_code=400, detail="File too large (max 5MB)")
     
+    if len(contents) == 0:
+        raise HTTPException(status_code=400, detail="Empty file")
+    
     try:
-        # Verify it's a valid image
+        # Verify it's a valid image and create a new copy to avoid image verification issues
         image = Image.open(io.BytesIO(contents))
-        image.verify()
-    except Exception:
-        raise HTTPException(status_code=400, detail="Invalid image file")
+        # Convert to RGB if needed and create a copy
+        if image.mode in ('RGBA', 'LA', 'P'):
+            image = image.convert('RGB')
+        
+        # Create a new image buffer
+        output_buffer = io.BytesIO()
+        image.save(output_buffer, format='JPEG', quality=85)
+        processed_contents = output_buffer.getvalue()
+        
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Invalid image file: {str(e)}")
     
     # Convert to base64 for storage (in production, use cloud storage)
-    photo_data = base64.b64encode(contents).decode('utf-8')
-    photo_url = f"data:{file.content_type};base64,{photo_data}"
+    photo_data = base64.b64encode(processed_contents).decode('utf-8')
+    photo_url = f"data:image/jpeg;base64,{photo_data}"
     
     # Update user photos
     user_doc = await db.users.find_one({"id": current_user_id})
@@ -287,7 +298,7 @@ async def upload_photo(
         {"$set": {"photos": photos}}
     )
     
-    return {"message": "Photo uploaded successfully", "photo_count": len(photos)}
+    return {"message": "Photo uploaded successfully", "photo_count": len(photos), "photo_url": photo_url}
 
 @api_router.put("/profile")
 async def update_profile(
