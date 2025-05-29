@@ -235,27 +235,46 @@ const ProfileSetupView = ({ token, currentUser, onComplete }) => {
     const file = e.target.files[0];
     if (!file) return;
 
+    // Validate file type
+    if (!file.type.startsWith('image/')) {
+      setError('Please select an image file');
+      return;
+    }
+
+    // Validate file size (5MB)
+    if (file.size > 5 * 1024 * 1024) {
+      setError('File too large. Please select an image under 5MB');
+      return;
+    }
+
     const formData = new FormData();
     formData.append('file', file);
 
     try {
       setLoading(true);
-      await axios.post(`${API}/profile/upload-photo`, formData, {
+      setError('');
+      const response = await axios.post(`${API}/profile/upload-photo`, formData, {
         headers: {
           Authorization: `Bearer ${token}`,
           'Content-Type': 'multipart/form-data'
         }
       });
       
-      // Refresh photos
-      const response = await axios.get(`${API}/profile/me`, {
+      // Refresh user profile to get updated photos
+      const profileResponse = await axios.get(`${API}/profile/me`, {
         headers: { Authorization: `Bearer ${token}` }
       });
-      setPhotos(response.data.photos || []);
+      setPhotos(profileResponse.data.photos || []);
+      
+      // Show success message
+      console.log(`Photo uploaded successfully! Total photos: ${response.data.photo_count}`);
     } catch (err) {
-      setError(err.response?.data?.detail || 'Failed to upload photo');
+      console.error('Upload error:', err);
+      setError(err.response?.data?.detail || 'Failed to upload photo. Please try again.');
     } finally {
       setLoading(false);
+      // Reset file input
+      e.target.value = '';
     }
   };
 
