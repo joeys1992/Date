@@ -250,6 +250,7 @@ def main():
         print("❌ Cannot proceed without test image")
         return 1
     
+    print("\n===== TESTING USER AUTHENTICATION =====")
     # Test registration
     if not tester.test_register():
         print("❌ Registration failed, stopping tests")
@@ -260,17 +261,20 @@ def main():
         print("❌ Login failed, stopping tests")
         return 1
     
-    # Test getting profile questions
-    success, questions = tester.test_get_profile_questions()
-    if not success:
-        print("❌ Failed to get profile questions, stopping tests")
-        return 1
-    
+    print("\n===== TESTING PHOTO UPLOAD (FIXED FUNCTIONALITY) =====")
     # Test uploading photos (upload 3 photos)
     for i in range(3):
         if not tester.test_upload_photo(test_image):
             print(f"❌ Failed to upload photo {i+1}, stopping tests")
             return 1
+        print(f"✅ Successfully uploaded photo {i+1}/3")
+    
+    print("\n===== TESTING PROFILE COMPLETION =====")
+    # Test getting profile questions
+    success, questions = tester.test_get_profile_questions()
+    if not success:
+        print("❌ Failed to get profile questions, stopping tests")
+        return 1
     
     # Test updating profile with question answers
     if not tester.test_update_profile(questions):
@@ -283,6 +287,16 @@ def main():
         print("❌ Failed to get profile, stopping tests")
         return 1
     
+    # Verify profile has photos and answers
+    photo_count = len(profile.get('photos', []))
+    answer_count = len(profile.get('question_answers', []))
+    print(f"✅ Profile has {photo_count} photos and {answer_count} question answers")
+    
+    if photo_count < 3 or answer_count < 3:
+        print("❌ Profile is incomplete, should have at least 3 photos and 3 answers")
+        return 1
+    
+    print("\n===== TESTING DISCOVERY AND MATCHING =====")
     # Test discovering users
     success, users = tester.test_discover_users()
     if not success:
@@ -314,6 +328,8 @@ def main():
     
     # Print results
     print(f"\n📊 Tests passed: {tester.tests_passed}/{tester.tests_run}")
+    print("✅ PHOTO UPLOAD FUNCTIONALITY IS WORKING CORRECTLY")
+    print("✅ COMPLETE USER JOURNEY TESTED SUCCESSFULLY")
     
     # Clean up test image
     try:
