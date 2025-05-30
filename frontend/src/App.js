@@ -262,6 +262,13 @@ const AuthView = ({ onLogin, onRegistration }) => {
         });
         onLogin(response.data.user, response.data.access_token);
       } else {
+        // Validate required fields for registration
+        if (!formData.email || !formData.password || !formData.first_name || 
+            !formData.age || !formData.gender || !formData.gender_preference) {
+          setError('Please fill in all required fields');
+          return;
+        }
+
         const payload = {
           email: formData.email,
           password: formData.password,
@@ -271,11 +278,15 @@ const AuthView = ({ onLogin, onRegistration }) => {
           gender_preference: formData.gender_preference
         };
         
-        await axios.post(`${API}/register`, payload);
+        const response = await axios.post(`${API}/register`, payload);
+        // Registration successful, show verification message
+        setError(''); // Clear any previous errors
+        alert(`Registration successful! Check your email (${formData.email}) for verification link.`);
         onRegistration();
       }
     } catch (err) {
-      setError(err.response?.data?.detail || 'An error occurred');
+      console.error('Form submission error:', err);
+      setError(err.response?.data?.detail || err.response?.data?.message || 'An error occurred');
     } finally {
       setLoading(false);
     }
