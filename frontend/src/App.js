@@ -8,7 +8,7 @@ const API = `${BACKEND_URL}/api`;
 // Main App Component
 function App() {
   const [currentUser, setCurrentUser] = useState(null);
-  const [currentView, setCurrentView] = useState('auth'); // 'auth', 'profile-setup', 'main'
+  const [currentView, setCurrentView] = useState('auth'); // 'auth', 'email-verification', 'profile-setup', 'main'
   const [token, setToken] = useState(localStorage.getItem('token'));
 
   useEffect(() => {
@@ -35,9 +35,11 @@ function App() {
       }
     } catch (error) {
       console.error('Failed to fetch profile:', error);
-      localStorage.removeItem('token');
-      setToken(null);
-      setCurrentView('auth');
+      if (error.response?.status === 401) {
+        localStorage.removeItem('token');
+        setToken(null);
+        setCurrentView('auth');
+      }
     }
   };
 
@@ -47,6 +49,14 @@ function App() {
     localStorage.setItem('token', userToken);
   };
 
+  const handleRegistration = () => {
+    setCurrentView('email-verification');
+  };
+
+  const handleEmailVerified = () => {
+    setCurrentView('auth');
+  };
+
   const handleLogout = () => {
     localStorage.removeItem('token');
     setToken(null);
@@ -54,10 +64,22 @@ function App() {
     setCurrentView('auth');
   };
 
+  // Check URL for verification token
+  useEffect(() => {
+    const urlParams = new URLSearchParams(window.location.search);
+    const verificationToken = urlParams.get('token');
+    if (verificationToken) {
+      setCurrentView('email-verification');
+    }
+  }, []);
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-pink-100 to-purple-100">
       {currentView === 'auth' && (
-        <AuthView onLogin={handleLogin} />
+        <AuthView onLogin={handleLogin} onRegistration={handleRegistration} />
+      )}
+      {currentView === 'email-verification' && (
+        <EmailVerificationView onEmailVerified={handleEmailVerified} />
       )}
       {currentView === 'profile-setup' && (
         <ProfileSetupView 
@@ -77,14 +99,152 @@ function App() {
   );
 }
 
+// Email Verification View Component
+const EmailVerificationView = ({ onEmailVerified }) => {
+  const [status, setStatus] = useState('checking'); // 'checking', 'success', 'error', 'pending'
+  const [message, setMessage] = useState('');
+  const [email, setEmail] = useState('');
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    const urlParams = new URLSearchParams(window.location.search);
+    const token = urlParams.get('token');
+    
+    if (token) {
+      verifyEmail(token);
+    } else {
+      setStatus('pending');
+      setMessage('Please check your email for the verification link.');
+    }
+  }, []);
+
+  const verifyEmail = async (token) => {
+    try {
+      setStatus('checking');
+      setMessage('Verifying your email...');
+      
+      const response = await axios.post(`${API}/verify-email`, { token });
+      
+      setStatus('success');
+      setMessage(response.data.message);
+      
+      // Clear URL parameters
+      window.history.replaceState({}, document.title, window.location.pathname);
+      
+      // Redirect after 3 seconds
+      setTimeout(() => {
+        onEmailVerified();
+      }, 3000);
+    } catch (error) {
+      setStatus('error');
+      setMessage(error.response?.data?.detail || 'Verification failed');
+    }
+  };
+
+  const resendVerification = async () => {
+    if (!email) {
+      alert('Please enter your email address');
+      return;
+    }
+
+    try {
+      setLoading(true);
+      await axios.post(`${API}/resend-verification`, { email });
+      setMessage('Verification email resent! Please check your inbox.');
+    } catch (error) {
+      setMessage(error.response?.data?.detail || 'Failed to resend verification');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="min-h-screen flex items-center justify-center p-4">
+      <div className="bg-white rounded-2xl shadow-xl p-8 w-full max-w-md text-center">
+        <div className="mb-8">
+          <h1 className="text-3xl font-bold text-gray-800 mb-2">💕 DateConnect</h1>
+          <h2 className="text-xl font-semibold text-gray-700">Email Verification</h2>
+        </div>
+
+        {status === 'checking' && (
+          <div className="text-center">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-pink-500 mx-auto mb-4"></div>
+            <p className="text-gray-600">{message}</p>
+          </div>
+        )}
+
+        {status === 'success' && (
+          <div className="text-center">
+            <div className="text-6xl mb-4">✅</div>
+            <p className="text-green-600 mb-4">{message}</p>
+            <p className="text-gray-600">Redirecting to login...</p>
+          </div>
+        )}
+
+        {status === 'error' && (
+          <div className="text-center">
+            <div className="text-6xl mb-4">❌</div>
+            <p className="text-red-600 mb-6">{message}</p>
+            <button
+              onClick={onEmailVerified}
+              className="w-full bg-pink-500 text-white py-2 px-4 rounded-lg hover:bg-pink-600"
+            >
+              Back to Login
+            </button>
+          </div>
+        )}
+
+        {status === 'pending' && (
+          <div className="text-center">
+            <div className="text-6xl mb-4">📧</div>
+            <p className="text-gray-600 mb-6">{message}</p>
+            
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Email Address
+                </label>
+                <input
+                  type="email"
+                  placeholder="Enter your email to resend verification"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-pink-500 focus:border-pink-500"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                />
+              </div>
+              
+              <button
+                onClick={resendVerification}
+                disabled={loading}
+                className="w-full bg-blue-500 text-white py-2 px-4 rounded-lg hover:bg-blue-600 disabled:opacity-50"
+              >
+                {loading ? 'Sending...' : 'Resend Verification Email'}
+              </button>
+              
+              <button
+                onClick={onEmailVerified}
+                className="w-full bg-gray-500 text-white py-2 px-4 rounded-lg hover:bg-gray-600"
+              >
+                Back to Login
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
+
 // Authentication View Component
-const AuthView = ({ onLogin }) => {
+const AuthView = ({ onLogin, onRegistration }) => {
   const [isLogin, setIsLogin] = useState(true);
   const [formData, setFormData] = useState({
     email: '',
     password: '',
     first_name: '',
-    age: ''
+    age: '',
+    gender: '',
+    gender_preference: ''
   });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -95,14 +255,25 @@ const AuthView = ({ onLogin }) => {
     setError('');
 
     try {
-      const endpoint = isLogin ? '/login' : '/register';
-      const payload = isLogin 
-        ? { email: formData.email, password: formData.password }
-        : formData;
-
-      const response = await axios.post(`${API}${endpoint}`, payload);
-      
-      onLogin(response.data.user, response.data.access_token);
+      if (isLogin) {
+        const response = await axios.post(`${API}/login`, {
+          email: formData.email,
+          password: formData.password
+        });
+        onLogin(response.data.user, response.data.access_token);
+      } else {
+        const payload = {
+          email: formData.email,
+          password: formData.password,
+          first_name: formData.first_name,
+          age: parseInt(formData.age),
+          gender: formData.gender,
+          gender_preference: formData.gender_preference
+        };
+        
+        await axios.post(`${API}/register`, payload);
+        onRegistration();
+      }
     } catch (err) {
       setError(err.response?.data?.detail || 'An error occurred');
     } finally {
@@ -143,6 +314,11 @@ const AuthView = ({ onLogin }) => {
               value={formData.password}
               onChange={(e) => setFormData({...formData, password: e.target.value})}
             />
+            {!isLogin && (
+              <p className="text-xs text-gray-500 mt-1">
+                Must contain 8+ characters, uppercase, lowercase, number, and special character
+              </p>
+            )}
           </div>
 
           {!isLogin && (
@@ -171,8 +347,41 @@ const AuthView = ({ onLogin }) => {
                   max="100"
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-pink-500 focus:border-pink-500"
                   value={formData.age}
-                  onChange={(e) => setFormData({...formData, age: parseInt(e.target.value)})}
+                  onChange={(e) => setFormData({...formData, age: e.target.value})}
                 />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Gender
+                </label>
+                <select
+                  required
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-pink-500 focus:border-pink-500"
+                  value={formData.gender}
+                  onChange={(e) => setFormData({...formData, gender: e.target.value})}
+                >
+                  <option value="">Select your gender</option>
+                  <option value="male">Male</option>
+                  <option value="female">Female</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Looking for
+                </label>
+                <select
+                  required
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-pink-500 focus:border-pink-500"
+                  value={formData.gender_preference}
+                  onChange={(e) => setFormData({...formData, gender_preference: e.target.value})}
+                >
+                  <option value="">Who would you like to meet?</option>
+                  <option value="male">Men</option>
+                  <option value="female">Women</option>
+                  <option value="both">Everyone</option>
+                </select>
               </div>
             </>
           )}
@@ -188,7 +397,7 @@ const AuthView = ({ onLogin }) => {
             disabled={loading}
             className="w-full bg-gradient-to-r from-pink-500 to-purple-600 text-white py-2 px-4 rounded-lg hover:from-pink-600 hover:to-purple-700 disabled:opacity-50 transition duration-200"
           >
-            {loading ? 'Loading...' : (isLogin ? 'Sign In' : 'Sign Up')}
+            {loading ? 'Loading...' : (isLogin ? 'Sign In' : 'Create Account')}
           </button>
         </form>
 
@@ -205,7 +414,7 @@ const AuthView = ({ onLogin }) => {
   );
 };
 
-// Profile Setup View Component
+// Profile Setup View Component (keeping previous implementation with slight updates)
 const ProfileSetupView = ({ token, currentUser, onComplete }) => {
   const [step, setStep] = useState(1); // 1: photos, 2: questions
   const [photos, setPhotos] = useState([]);
@@ -462,7 +671,7 @@ const ProfileSetupView = ({ token, currentUser, onComplete }) => {
   );
 };
 
-// Main App View Component
+// Main App View Component (keeping previous implementation)
 const MainView = ({ token, currentUser, onLogout }) => {
   const [activeTab, setActiveTab] = useState('discover'); // 'discover', 'matches', 'profile'
   const [users, setUsers] = useState([]);
@@ -578,6 +787,9 @@ const MainView = ({ token, currentUser, onLogout }) => {
                       {currentDisplayUser.location && (
                         <p className="text-white/80 text-sm">{currentDisplayUser.location}</p>
                       )}
+                      <p className="text-white/60 text-xs mt-1">
+                        {currentDisplayUser.gender} • Looking for {currentDisplayUser.gender_preference}
+                      </p>
                     </div>
                     <button
                       onClick={() => viewProfile(currentDisplayUser.id)}
@@ -602,6 +814,9 @@ const MainView = ({ token, currentUser, onLogout }) => {
                       <h2 className="text-xl font-bold mb-2">
                         {currentDisplayUser.first_name}, {currentDisplayUser.age}
                       </h2>
+                      <p className="text-gray-600 text-sm mb-4">
+                        {currentDisplayUser.gender} • Looking for {currentDisplayUser.gender_preference}
+                      </p>
                       
                       {currentDisplayUser.question_answers?.map((qa, index) => (
                         <div key={index} className="mb-4">
@@ -688,10 +903,19 @@ const MainView = ({ token, currentUser, onLogout }) => {
                 <strong>Age:</strong> {currentUser?.age}
               </div>
               <div>
+                <strong>Gender:</strong> {currentUser?.gender}
+              </div>
+              <div>
+                <strong>Looking for:</strong> {currentUser?.gender_preference}
+              </div>
+              <div>
                 <strong>Photos:</strong> {currentUser?.photos?.length || 0}
               </div>
               <div>
                 <strong>Questions Answered:</strong> {currentUser?.question_answers?.length || 0}
+              </div>
+              <div>
+                <strong>Email Verified:</strong> {currentUser?.email_verified ? '✅' : '❌'}
               </div>
             </div>
           </div>

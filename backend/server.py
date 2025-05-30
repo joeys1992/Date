@@ -1,4 +1,4 @@
-from fastapi import FastAPI, APIRouter, HTTPException, Depends, UploadFile, File, Form
+from fastapi import FastAPI, APIRouter, HTTPException, Depends, UploadFile, File, Form, BackgroundTasks
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
@@ -6,7 +6,7 @@ from motor.motor_asyncio import AsyncIOMotorClient
 import os
 import logging
 from pathlib import Path
-from pydantic import BaseModel, Field, EmailStr
+from pydantic import BaseModel, Field, EmailStr, validator
 from typing import List, Optional, Dict, Any
 import uuid
 from datetime import datetime, timedelta
@@ -15,6 +15,9 @@ import bcrypt
 import base64
 from PIL import Image
 import io
+import re
+from itsdangerous import URLSafeTimedSerializer, SignatureExpired, BadSignature
+from enum import Enum
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
@@ -29,6 +32,10 @@ JWT_SECRET = "your-secret-key-change-in-production"
 JWT_ALGORITHM = "HS256"
 JWT_EXPIRATION_HOURS = 24
 
+# Email verification token service
+TOKEN_SECRET = "email-verification-secret-key-change-in-production"
+token_serializer = URLSafeTimedSerializer(TOKEN_SECRET, salt='email-verification')
+
 # Create the main app without a prefix
 app = FastAPI(title="Dating App API")
 
@@ -36,6 +43,16 @@ app = FastAPI(title="Dating App API")
 api_router = APIRouter(prefix="/api")
 
 security = HTTPBearer()
+
+# Gender Enums
+class Gender(str, Enum):
+    MALE = "male"
+    FEMALE = "female"
+
+class GenderPreference(str, Enum):
+    MALE = "male"
+    FEMALE = "female"
+    BOTH = "both"
 
 # Profile Questions - 28 deep questions for users to answer
 PROFILE_QUESTIONS = [
@@ -88,16 +105,91 @@ PROFILE_QUESTIONS = [
     "What's the weirdest compliment you've ever received that actually made you really happy, and why did it resonate with you so much?"
 ]
 
+# Password validation function
+def validate_password(password: str) -> str:
+    """Validate password meets security requirements"""
+    if len(password) < 8:
+        raise ValueError("Password must be at least 8 characters long")
+    
+    if not re.search(r"[A-Z]", password):
+        raise ValueError("Password must contain at least one uppercase letter")
+    
+    if not re.search(r"[a-z]", password):
+        raise ValueError("Password must contain at least one lowercase letter")
+    
+    if not re.search(r"\d", password):
+        raise ValueError("Password must contain at least one number")
+    
+    if not re.search(r"[!@#$%^&*(),.?\":{}|<>]", password):
+        raise ValueError("Password must contain at least one special character")
+    
+    return password
+
+# Email verification service (mock - logs to console)
+class EmailService:
+    @staticmethod
+    async def send_verification_email(email: str, token: str) -> bool:
+        """Mock email service - logs verification link to console"""
+        try:
+            verification_url = f"http://localhost:3000/verify?token={token}"
+            
+            # In production, replace this with actual email sending
+            print(f"\n{'='*60}")
+            print(f"📧 VERIFICATION EMAIL FOR: {email}")
+            print(f"🔗 Verification URL: {verification_url}")
+            print(f"⏰ This link expires in 24 hours")
+            print(f"{'='*60}\n")
+            
+            # Log to file as well
+            with open("/tmp/verification_emails.log", "a") as f:
+                f.write(f"{datetime.utcnow()}: {email} -> {verification_url}\n")
+            
+            return True
+        except Exception as e:
+            print(f"❌ Failed to send verification email: {e}")
+            return False
+
+# Token generation and validation
+def generate_verification_token(email: str) -> str:
+    """Generate a secure verification token"""
+    return token_serializer.dumps(email)
+
+def validate_verification_token(token: str) -> Optional[str]:
+    """Validate token and return email if valid"""
+    try:
+        email = token_serializer.loads(token, max_age=24*60*60)  # 24 hours
+        return email
+    except (SignatureExpired, BadSignature):
+        return None
+
 # Pydantic Models
 class UserRegistration(BaseModel):
     email: EmailStr
     password: str
     first_name: str
     age: int
+    gender: Gender
+    gender_preference: GenderPreference
+
+    @validator('password')
+    def validate_password_strength(cls, v):
+        return validate_password(v)
+
+    @validator('age')
+    def validate_age_range(cls, v):
+        if v < 18 or v > 100:
+            raise ValueError('Age must be between 18 and 100')
+        return v
 
 class UserLogin(BaseModel):
     email: EmailStr
     password: str
+
+class EmailVerification(BaseModel):
+    token: str
+
+class ResendVerification(BaseModel):
+    email: EmailStr
 
 class QuestionAnswer(BaseModel):
     question_index: int
@@ -113,6 +205,8 @@ class User(BaseModel):
     email: EmailStr
     first_name: str
     age: int
+    gender: Gender
+    gender_preference: GenderPreference
     bio: Optional[str] = None
     photos: List[str] = []
     question_answers: List[QuestionAnswer] = []
@@ -122,7 +216,9 @@ class User(BaseModel):
     matches: List[str] = []  # Mutual matches
     profile_views: List[str] = []  # Who viewed this profile
     is_verified: bool = False
+    email_verified: bool = False
     created_at: datetime = Field(default_factory=datetime.utcnow)
+    verified_at: Optional[datetime] = None
     last_active: datetime = Field(default_factory=datetime.utcnow)
 
 class Match(BaseModel):
@@ -161,6 +257,15 @@ async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(s
         user_id = payload.get("user_id")
         if not user_id:
             raise HTTPException(status_code=401, detail="Invalid token")
+        
+        # Check if user exists and is email verified
+        user_doc = await db.users.find_one({"id": user_id})
+        if not user_doc:
+            raise HTTPException(status_code=401, detail="User not found")
+        
+        if not user_doc.get("email_verified", False):
+            raise HTTPException(status_code=401, detail="Email not verified")
+        
         return user_id
     except jwt.ExpiredSignatureError:
         raise HTTPException(status_code=401, detail="Token expired")
@@ -170,24 +275,47 @@ async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(s
 def count_words(text: str) -> int:
     return len(text.strip().split())
 
+def can_users_match(user1: dict, user2: dict) -> bool:
+    """Check if two users can see each other based on gender preferences"""
+    user1_gender = user1.get("gender")
+    user2_gender = user2.get("gender")
+    user1_pref = user1.get("gender_preference")
+    user2_pref = user2.get("gender_preference")
+    
+    # Check if user1 wants to see user2's gender
+    user1_wants_user2 = (
+        user1_pref == "both" or 
+        user1_pref == user2_gender
+    )
+    
+    # Check if user2 wants to see user1's gender
+    user2_wants_user1 = (
+        user2_pref == "both" or 
+        user2_pref == user1_gender
+    )
+    
+    return user1_wants_user2 and user2_wants_user1
+
 # API Routes
 @api_router.post("/register")
-async def register(user_data: UserRegistration):
+async def register(
+    user_data: UserRegistration,
+    background_tasks: BackgroundTasks
+):
     # Check if user already exists
     existing_user = await db.users.find_one({"email": user_data.email})
     if existing_user:
         raise HTTPException(status_code=400, detail="Email already registered")
-    
-    # Validate age
-    if user_data.age < 18 or user_data.age > 100:
-        raise HTTPException(status_code=400, detail="Age must be between 18 and 100")
     
     # Create user
     hashed_password = hash_password(user_data.password)
     user = User(
         email=user_data.email,
         first_name=user_data.first_name,
-        age=user_data.age
+        age=user_data.age,
+        gender=user_data.gender,
+        gender_preference=user_data.gender_preference,
+        email_verified=False
     )
     
     user_doc = user.dict()
@@ -195,18 +323,65 @@ async def register(user_data: UserRegistration):
     
     await db.users.insert_one(user_doc)
     
-    # Generate token
-    token = create_access_token(user.id)
+    # Generate verification token and send email
+    verification_token = generate_verification_token(user_data.email)
+    background_tasks.add_task(
+        EmailService.send_verification_email,
+        user_data.email,
+        verification_token
+    )
     
     return {
-        "access_token": token,
-        "user": {
-            "id": user.id,
-            "email": user.email,
-            "first_name": user.first_name,
-            "age": user.age
-        }
+        "message": "Registration successful! Please check your email for verification link.",
+        "email": user.email,
+        "user_id": user.id
     }
+
+@api_router.post("/verify-email")
+async def verify_email(verification_data: EmailVerification):
+    """Verify user email with token"""
+    email = validate_verification_token(verification_data.token)
+    if not email:
+        raise HTTPException(status_code=400, detail="Invalid or expired verification token")
+    
+    # Update user verification status
+    result = await db.users.update_one(
+        {"email": email},
+        {
+            "$set": {
+                "email_verified": True,
+                "verified_at": datetime.utcnow()
+            }
+        }
+    )
+    
+    if result.matched_count == 0:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    return {"message": "Email verified successfully"}
+
+@api_router.post("/resend-verification")
+async def resend_verification(
+    resend_data: ResendVerification,
+    background_tasks: BackgroundTasks
+):
+    """Resend verification email"""
+    user_doc = await db.users.find_one({"email": resend_data.email})
+    if not user_doc:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    if user_doc.get("email_verified", False):
+        raise HTTPException(status_code=400, detail="Email already verified")
+    
+    # Generate new token and send email
+    verification_token = generate_verification_token(resend_data.email)
+    background_tasks.add_task(
+        EmailService.send_verification_email,
+        resend_data.email,
+        verification_token
+    )
+    
+    return {"message": "Verification email resent"}
 
 @api_router.post("/login")
 async def login(login_data: UserLogin):
@@ -218,6 +393,10 @@ async def login(login_data: UserLogin):
     # Verify password
     if not verify_password(login_data.password, user_doc["password_hash"]):
         raise HTTPException(status_code=400, detail="Invalid email or password")
+    
+    # Check email verification
+    if not user_doc.get("email_verified", False):
+        raise HTTPException(status_code=400, detail="Please verify your email before logging in")
     
     # Update last active
     await db.users.update_one(
@@ -234,7 +413,9 @@ async def login(login_data: UserLogin):
             "id": user_doc["id"],
             "email": user_doc["email"],
             "first_name": user_doc["first_name"],
-            "age": user_doc["age"]
+            "age": user_doc["age"],
+            "gender": user_doc["gender"],
+            "gender_preference": user_doc["gender_preference"]
         }
     }
 
@@ -355,7 +536,7 @@ async def discover_users(
     current_user_id: str = Depends(get_current_user),
     limit: int = 10
 ):
-    """Get users to swipe on (exclude already liked/passed users)"""
+    """Get users to swipe on (exclude already liked/passed users and apply gender filtering)"""
     current_user = await db.users.find_one({"id": current_user_id})
     if not current_user:
         raise HTTPException(status_code=404, detail="User not found")
@@ -363,23 +544,29 @@ async def discover_users(
     # Get users to exclude (already liked + self)
     exclude_ids = current_user.get("likes_given", []) + [current_user_id]
     
-    # Find potential matches
+    # Find all potential matches first (must have photos and answers)
     cursor = db.users.find({
         "id": {"$nin": exclude_ids},
         "photos": {"$exists": True, "$not": {"$size": 0}},  # Must have photos
-        "question_answers": {"$exists": True, "$not": {"$size": 0}}  # Must have answered questions
-    }).limit(limit)
+        "question_answers": {"$exists": True, "$not": {"$size": 0}},  # Must have answered questions
+        "email_verified": True  # Must be email verified
+    })
     
-    users = []
+    # Filter by gender preferences
+    compatible_users = []
     async for user_doc in cursor:
-        user_doc.pop("password_hash", None)
-        user_doc.pop("_id", None)
-        user_doc.pop("likes_given", None)
-        user_doc.pop("likes_received", None)
-        user_doc.pop("matches", None)
-        users.append(user_doc)
+        if can_users_match(current_user, user_doc):
+            user_doc.pop("password_hash", None)
+            user_doc.pop("_id", None)
+            user_doc.pop("likes_given", None)
+            user_doc.pop("likes_received", None)
+            user_doc.pop("matches", None)
+            compatible_users.append(user_doc)
+            
+            if len(compatible_users) >= limit:
+                break
     
-    return {"users": users}
+    return {"users": compatible_users}
 
 @api_router.post("/profile/{user_id}/view")
 async def view_profile(
@@ -415,6 +602,11 @@ async def like_user(
     profile_views = target_user.get("profile_views", [])
     if current_user_id not in profile_views:
         raise HTTPException(status_code=400, detail="Must view profile before liking")
+    
+    # Verify users are compatible (gender preferences)
+    current_user = await db.users.find_one({"id": current_user_id})
+    if not can_users_match(current_user, target_user):
+        raise HTTPException(status_code=400, detail="Users are not compatible")
     
     # Add like
     await db.users.update_one(
