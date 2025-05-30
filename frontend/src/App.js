@@ -222,7 +222,7 @@ const EmailVerificationView = ({ onEmailVerified }) => {
                 </label>
                 <input
                   type="email"
-                  placeholder="Enter your email to resend verification"
+                  placeholder={email || "Enter your email to resend verification"}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-pink-500 focus:border-pink-500"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
