@@ -49,11 +49,17 @@ function App() {
     localStorage.setItem('token', userToken);
   };
 
-  const handleRegistration = () => {
+  const handleRegistration = (registrationData) => {
+    // Store registration email for verification flow
+    if (registrationData && registrationData.email) {
+      localStorage.setItem('pending-verification-email', registrationData.email);
+    }
     setCurrentView('email-verification');
   };
 
   const handleEmailVerified = () => {
+    // Clear pending verification email
+    localStorage.removeItem('pending-verification-email');
     setCurrentView('auth');
   };
 
