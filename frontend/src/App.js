@@ -597,7 +597,7 @@ const ProfileSetupView = ({ token, currentUser, onComplete }) => {
                       accept="image/*"
                       onChange={handlePhotoUpload}
                       className="hidden"
-                      disabled={loading || !email}
+                      disabled={loading}
                     />
                     <div className="text-center">
                       {loading ? (
