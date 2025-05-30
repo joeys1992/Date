@@ -116,11 +116,21 @@ const EmailVerificationView = ({ onEmailVerified }) => {
     const urlParams = new URLSearchParams(window.location.search);
     const token = urlParams.get('token');
     
+    // Check if we have a pending verification email from registration
+    const pendingEmail = localStorage.getItem('pending-verification-email');
+    if (pendingEmail) {
+      setEmail(pendingEmail);
+    }
+    
     if (token) {
       verifyEmail(token);
     } else {
       setStatus('pending');
-      setMessage('Please check your email for the verification link.');
+      if (pendingEmail) {
+        setMessage(`Please check your email (${pendingEmail}) for the verification link.`);
+      } else {
+        setMessage('Please check your email for the verification link.');
+      }
     }
   }, []);
 
