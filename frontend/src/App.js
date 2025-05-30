@@ -287,8 +287,7 @@ const AuthView = ({ onLogin, onRegistration }) => {
         const response = await axios.post(`${API}/register`, payload);
         // Registration successful, show verification message
         setError(''); // Clear any previous errors
-        alert(`Registration successful! Check your email (${formData.email}) for verification link.`);
-        onRegistration();
+        onRegistration({ email: formData.email, message: response.data.message });
       }
     } catch (err) {
       console.error('Form submission error:', err);
