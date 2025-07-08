@@ -775,6 +775,17 @@ const MainView = ({ token, currentUser, onLogout }) => {
     }
   };
 
+  const fetchConversations = async () => {
+    try {
+      const response = await axios.get(`${API}/conversations`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      setConversations(response.data.conversations);
+    } catch (err) {
+      console.error('Failed to fetch conversations:', err);
+    }
+  };
+
   const viewProfile = async (userId) => {
     try {
       await axios.post(`${API}/profile/${userId}/view`, {}, {
