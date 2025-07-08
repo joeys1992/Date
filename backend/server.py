@@ -577,6 +577,17 @@ async def update_profile(
     if profile_data.location is not None:
         update_data["location"] = profile_data.location
     
+    if profile_data.latitude is not None:
+        update_data["latitude"] = profile_data.latitude
+    
+    if profile_data.longitude is not None:
+        update_data["longitude"] = profile_data.longitude
+    
+    if profile_data.search_radius is not None:
+        if profile_data.search_radius < 1 or profile_data.search_radius > 100:
+            raise HTTPException(status_code=400, detail="Search radius must be between 1 and 100 miles")
+        update_data["search_radius"] = profile_data.search_radius
+    
     if profile_data.question_answers is not None:
         # Validate question answers
         for qa in profile_data.question_answers:
