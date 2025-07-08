@@ -699,17 +699,56 @@ const ProfileSetupView = ({ token, currentUser, onComplete }) => {
 
 // Main App View Component (keeping previous implementation)
 const MainView = ({ token, currentUser, onLogout }) => {
-  const [activeTab, setActiveTab] = useState('discover'); // 'discover', 'matches', 'profile'
+  const [activeTab, setActiveTab] = useState('discover'); // 'discover', 'matches', 'messages', 'profile'
   const [users, setUsers] = useState([]);
   const [currentUserIndex, setCurrentUserIndex] = useState(0);
   const [matches, setMatches] = useState([]);
+  const [conversations, setConversations] = useState([]);
   const [showProfileDetail, setShowProfileDetail] = useState(false);
+  const [selectedConversation, setSelectedConversation] = useState(null);
+  const [websocket, setWebsocket] = useState(null);
+
+  // WebSocket connection
+  useEffect(() => {
+    if (token && currentUser) {
+      const backendUrl = process.env.REACT_APP_BACKEND_URL.replace('https://', 'wss://').replace('http://', 'ws://');
+      const ws = new WebSocket(`${backendUrl}/ws/${currentUser.id}?token=${token}`);
+      
+      ws.onopen = () => {
+        console.log('WebSocket connected');
+        setWebsocket(ws);
+      };
+      
+      ws.onmessage = (event) => {
+        const data = JSON.parse(event.data);
+        if (data.type === 'new_message') {
+          // Handle new message
+          console.log('New message received:', data.message);
+          // Refresh conversations if on messages tab
+          if (activeTab === 'messages') {
+            fetchConversations();
+          }
+        }
+      };
+      
+      ws.onclose = () => {
+        console.log('WebSocket disconnected');
+        setWebsocket(null);
+      };
+      
+      return () => {
+        ws.close();
+      };
+    }
+  }, [token, currentUser, activeTab]);
 
   useEffect(() => {
     if (activeTab === 'discover') {
       fetchUsers();
     } else if (activeTab === 'matches') {
       fetchMatches();
+    } else if (activeTab === 'messages') {
+      fetchConversations();
     }
   }, [activeTab]);
 
