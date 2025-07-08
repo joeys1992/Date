@@ -17,25 +17,19 @@ API_URL = f"{BACKEND_URL}/api"
 
 def get_latest_match():
     """Get the latest match from the database"""
-    cmd = 'mongosh test_database --eval "db.matches.findOne({}, {}, {sort: {matched_at: -1}})" --quiet'
+    cmd = 'mongosh test_database --eval "var match = db.matches.findOne({}, {}, {sort: {matched_at: -1}}); if (match) { print(match.id + \"|\" + match.user1_id + \"|\" + match.user2_id); } else { print(\"null\"); }" --quiet'
     result = subprocess.run(cmd, shell=True, capture_output=True, text=True)
     
     if result.returncode == 0:
-        # Parse the MongoDB output
         output = result.stdout.strip()
         if output and output != "null":
-            # Extract match info
-            lines = output.split('\n')
-            match_info = {}
-            for line in lines:
-                if 'id:' in line:
-                    match_info['id'] = line.split("'")[1]
-                elif 'user1_id:' in line:
-                    match_info['user1_id'] = line.split("'")[1]
-                elif 'user2_id:' in line:
-                    match_info['user2_id'] = line.split("'")[1]
-            
-            return match_info
+            parts = output.split('|')
+            if len(parts) == 3:
+                return {
+                    'id': parts[0],
+                    'user1_id': parts[1],
+                    'user2_id': parts[2]
+                }
     
     return None
 
