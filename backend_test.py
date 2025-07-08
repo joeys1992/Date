@@ -2,6 +2,9 @@ import requests
 import time
 import uuid
 import logging
+import json
+import websocket
+import threading
 from datetime import datetime
 
 # Configure logging
@@ -11,6 +14,7 @@ logger = logging.getLogger(__name__)
 # Backend URL from frontend .env
 BACKEND_URL = "https://e659bb2f-b183-4c58-9715-2cdca4d303f4.preview.emergentagent.com"
 API_URL = f"{BACKEND_URL}/api"
+WS_URL = f"wss://{BACKEND_URL.replace('https://', '')}/ws"
 
 class DatingAppTester:
     def __init__(self):
