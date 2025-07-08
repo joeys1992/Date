@@ -9,7 +9,7 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(
 logger = logging.getLogger(__name__)
 
 # Backend URL from frontend .env
-BACKEND_URL = "https://2f0cb9c3-ceef-48eb-a3b7-3e6e8cc088b0.preview.emergentagent.com"
+BACKEND_URL = "https://e659bb2f-b183-4c58-9715-2cdca4d303f4.preview.emergentagent.com"
 API_URL = f"{BACKEND_URL}/api"
 
 class DatingAppTester:

@@ -282,7 +282,7 @@ class DatingAppMatchTester:
 def main():
     # Get backend URL from environment
     import os
-    backend_url = "https://2f0cb9c3-ceef-48eb-a3b7-3e6e8cc088b0.preview.emergentagent.com"
+    backend_url = "https://e659bb2f-b183-4c58-9715-2cdca4d303f4.preview.emergentagent.com"
     
     print(f"🚀 Starting Dating App Matching Tests against {backend_url}")
     
