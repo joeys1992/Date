@@ -869,8 +869,76 @@ async def get_messages(
     
     return {"messages": messages}
 
-@api_router.get("/conversations")
-async def get_conversations(current_user_id: str = Depends(get_current_user)):
+@api_router.get("/conversations/{match_id}/questions")
+async def get_conversation_questions(
+    match_id: str,
+    current_user_id: str = Depends(get_current_user)
+):
+    """Get the other user's profile questions for responding to (first message)"""
+    # Verify the match exists and user is part of it
+    match_doc = await db.matches.find_one({"id": match_id})
+    if not match_doc:
+        raise HTTPException(status_code=404, detail="Match not found")
+    
+    # Check if current user is part of this match
+    if current_user_id not in [match_doc["user1_id"], match_doc["user2_id"]]:
+        raise HTTPException(status_code=403, detail="Not authorized")
+    
+    # Get the other user's ID
+    other_user_id = match_doc["user1_id"] if current_user_id == match_doc["user2_id"] else match_doc["user2_id"]
+    
+    # Get the other user's profile
+    other_user = await db.users.find_one({"id": other_user_id})
+    if not other_user:
+        raise HTTPException(status_code=404, detail="Other user not found")
+    
+    # Get their question answers
+    question_answers = other_user.get("question_answers", [])
+    
+    # Format the response with question text
+    questions_with_answers = []
+    for qa in question_answers:
+        question_index = qa.get("question_index")
+        if question_index is not None and question_index < len(PROFILE_QUESTIONS):
+            questions_with_answers.append({
+                "question_index": question_index,
+                "question": PROFILE_QUESTIONS[question_index],
+                "answer": qa.get("answer", "")
+            })
+    
+    return {
+        "other_user": {
+            "id": other_user["id"],
+            "first_name": other_user["first_name"],
+            "age": other_user["age"],
+            "photos": other_user.get("photos", [])
+        },
+        "questions_with_answers": questions_with_answers
+    }
+
+@api_router.get("/conversations/{match_id}/status")
+async def get_conversation_status(
+    match_id: str,
+    current_user_id: str = Depends(get_current_user)
+):
+    """Get conversation status - whether first message has been sent"""
+    # Verify the match exists and user is part of it
+    match_doc = await db.matches.find_one({"id": match_id})
+    if not match_doc:
+        raise HTTPException(status_code=404, detail="Match not found")
+    
+    # Check if current user is part of this match
+    if current_user_id not in [match_doc["user1_id"], match_doc["user2_id"]]:
+        raise HTTPException(status_code=403, detail="Not authorized")
+    
+    # Check conversation status
+    conversation = await db.conversations.find_one({"match_id": match_id})
+    conversation_started = conversation is not None and conversation.get("conversation_started", False)
+    
+    return {
+        "conversation_started": conversation_started,
+        "match_id": match_id
+    }
     """Get all conversations for the current user"""
     # Get conversations where user is a participant
     cursor = db.conversations.find({"participants": current_user_id}).sort("last_message_at", -1)
