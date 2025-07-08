@@ -252,32 +252,30 @@ class EndToEndTester:
         """Test the messaging system between two users"""
         self.log_step(f"Testing messaging between {user1['name']} and {user2['name']}")
         
-        # First, we need to create a match record in the database
-        # Since the API doesn't directly expose match IDs, we'll construct one
-        match_id = f"match_{min(user1['user_id'], user2['user_id'])}_{max(user1['user_id'], user2['user_id'])}"
+        # Get the actual match ID from the database
+        match_id = self.get_match_id(user1, user2)
+        if not match_id:
+            self.log_step(f"Could not find match ID between {user1['name']} and {user2['name']}", False)
+            return False
+            
+        self.log_step(f"Using match ID: {match_id}")
         
         headers1 = {'Authorization': f'Bearer {user1["token"]}'}
         headers2 = {'Authorization': f'Bearer {user2["token"]}'}
-        
-        # Let's try to get the actual match ID by checking conversations
-        response = requests.get(f"{API_URL}/conversations", headers=headers1)
-        if response.status_code == 200:
-            conversations = response.json()['conversations']
-            for conv in conversations:
-                if user2['user_id'] in conv['participants']:
-                    match_id = conv['match_id']
-                    break
         
         # Get conversation status
         response = requests.get(f"{API_URL}/conversations/{match_id}/status", headers=headers1)
         if response.status_code == 200:
             status = response.json()
             self.log_step(f"Conversation status: {status}")
+        else:
+            self.log_step(f"Failed to get conversation status: {response.status_code}", False)
+            return False
         
         # Get available questions for first message
         response = requests.get(f"{API_URL}/conversations/{match_id}/questions", headers=headers1)
         if response.status_code != 200:
-            self.log_step(f"Failed to get questions for {user1['name']}", False)
+            self.log_step(f"Failed to get questions for {user1['name']}: {response.status_code}", False)
             return False
             
         questions_data = response.json()
@@ -300,7 +298,7 @@ class EndToEndTester:
                                headers=headers1)
         
         if response.status_code != 200:
-            self.log_step(f"Failed to send first message from {user1['name']}", False, f"Status: {response.status_code}")
+            self.log_step(f"Failed to send first message from {user1['name']}: {response.status_code}", False)
             return False
             
         self.log_step(f"First message sent from {user1['name']} to {user2['name']}")
@@ -316,7 +314,7 @@ class EndToEndTester:
                                headers=headers2)
         
         if response.status_code != 200:
-            self.log_step(f"Failed to send response from {user2['name']}", False, f"Status: {response.status_code}")
+            self.log_step(f"Failed to send response from {user2['name']}: {response.status_code}", False)
             return False
             
         self.log_step(f"Response sent from {user2['name']} to {user1['name']}")
@@ -330,12 +328,18 @@ class EndToEndTester:
             for msg in messages:
                 sender_name = user1['name'] if msg['sender_id'] == user1['user_id'] else user2['name']
                 self.log_step(f"Message from {sender_name}: {msg['content'][:50]}...")
+        else:
+            self.log_step(f"Failed to get message history: {response.status_code}", False)
+            return False
         
         # Get conversations list
         response = requests.get(f"{API_URL}/conversations", headers=headers1)
         if response.status_code == 200:
             conversations = response.json()['conversations']
             self.log_step(f"Conversations retrieved: {len(conversations)} conversations")
+        else:
+            self.log_step(f"Failed to get conversations: {response.status_code}", False)
+            return False
         
         self.log_step(f"Messaging test completed successfully")
         return True
