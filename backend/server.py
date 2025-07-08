@@ -629,7 +629,7 @@ async def discover_users(
     current_user_id: str = Depends(get_current_user),
     limit: int = 10
 ):
-    """Get users to swipe on (exclude already liked/passed users and apply gender filtering)"""
+    """Get users to swipe on (exclude already liked/passed users and apply gender filtering and distance filtering)"""
     current_user = await db.users.find_one({"id": current_user_id})
     if not current_user:
         raise HTTPException(status_code=404, detail="User not found")
@@ -645,19 +645,54 @@ async def discover_users(
         "email_verified": True  # Must be email verified
     })
     
-    # Filter by gender preferences
+    # Filter by gender preferences and distance
     compatible_users = []
+    current_user_lat = current_user.get("latitude")
+    current_user_lon = current_user.get("longitude")
+    current_user_radius = current_user.get("search_radius", 25)
+    
     async for user_doc in cursor:
-        if can_users_match(current_user, user_doc):
-            user_doc.pop("password_hash", None)
-            user_doc.pop("_id", None)
-            user_doc.pop("likes_given", None)
-            user_doc.pop("likes_received", None)
-            user_doc.pop("matches", None)
-            compatible_users.append(user_doc)
+        # Check gender compatibility
+        if not can_users_match(current_user, user_doc):
+            continue
             
-            if len(compatible_users) >= limit:
-                break
+        # Check distance if both users have location
+        if current_user_lat and current_user_lon and user_doc.get("latitude") and user_doc.get("longitude"):
+            distance = calculate_distance(
+                current_user_lat, current_user_lon,
+                user_doc["latitude"], user_doc["longitude"]
+            )
+            
+            # Skip if user is outside search radius
+            if distance > current_user_radius:
+                continue
+                
+            # Add distance to user data
+            user_doc["distance"] = round(distance, 1)
+        elif current_user_lat and current_user_lon:
+            # Current user has location but other user doesn't - skip
+            continue
+        else:
+            # No location filtering if current user doesn't have location
+            user_doc["distance"] = None
+        
+        # Remove sensitive data
+        user_doc.pop("password_hash", None)
+        user_doc.pop("_id", None)
+        user_doc.pop("likes_given", None)
+        user_doc.pop("likes_received", None)
+        user_doc.pop("matches", None)
+        user_doc.pop("latitude", None)  # Don't expose exact coordinates
+        user_doc.pop("longitude", None)
+        
+        compatible_users.append(user_doc)
+        
+        if len(compatible_users) >= limit:
+            break
+    
+    # Sort by distance if available
+    if current_user_lat and current_user_lon:
+        compatible_users.sort(key=lambda x: x.get("distance", float('inf')))
     
     return {"users": compatible_users}
 
