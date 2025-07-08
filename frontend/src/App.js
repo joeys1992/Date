@@ -1801,10 +1801,7 @@ const LocationSettings = ({ currentUser, token, onUpdate }) => {
               setSearchRadius(newRadius);
               updateSearchRadius(newRadius);
             }}
-            className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer"
-            style={{
-              background: `linear-gradient(to right, #ec4899 0%, #ec4899 ${(searchRadius-1)/49*100}%, #e5e7eb ${(searchRadius-1)/49*100}%, #e5e7eb 100%)`
-            }}
+            className="location-slider"
           />
           <div className="flex justify-between text-xs text-gray-500 mt-1">
             <span>1 mile</span>
