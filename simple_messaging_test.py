@@ -36,29 +36,20 @@ def get_latest_match():
 def get_user_token(user_id):
     """Get user token by finding their email and logging in"""
     # Get user info from database
-    cmd = f'mongosh test_database --eval "db.users.findOne({{id: \\"{user_id}\\"}})" --quiet'
+    cmd = f'mongosh test_database --eval "var user = db.users.findOne({{id: \\"{user_id}\\"}}); if (user) {{ print(user.email); }} else {{ print(\\"null\\"); }}" --quiet'
     result = subprocess.run(cmd, shell=True, capture_output=True, text=True)
     
     if result.returncode == 0:
-        output = result.stdout.strip()
-        if output and output != "null":
-            # Extract email from output
-            lines = output.split('\n')
-            email = None
-            for line in lines:
-                if 'email:' in line:
-                    email = line.split("'")[1]
-                    break
+        email = result.stdout.strip()
+        if email and email != "null":
+            # Try to login with a common password
+            response = requests.post(f"{API_URL}/login", json={
+                "email": email,
+                "password": "TestPass123!"
+            })
             
-            if email:
-                # Try to login with a common password
-                response = requests.post(f"{API_URL}/login", json={
-                    "email": email,
-                    "password": "TestPass123!"
-                })
-                
-                if response.status_code == 200:
-                    return response.json()['access_token']
+            if response.status_code == 200:
+                return response.json()['access_token']
     
     return None
 
