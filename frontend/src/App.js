@@ -442,18 +442,33 @@ const AuthView = ({ onLogin, onRegistration }) => {
 
 // Profile Setup View Component (keeping previous implementation with slight updates)
 const ProfileSetupView = ({ token, currentUser, onComplete }) => {
-  const [step, setStep] = useState(1); // 1: photos, 2: questions
+  const [step, setStep] = useState(1); // 1: location, 2: photos, 3: questions
   const [photos, setPhotos] = useState([]);
   const [questions, setQuestions] = useState([]);
   const [selectedQuestions, setSelectedQuestions] = useState([]);
   const [answers, setAnswers] = useState({});
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  
+  // Location state
+  const [location, setLocation] = useState('');
+  const [coordinates, setCoordinates] = useState({ lat: null, lng: null });
+  const [searchRadius, setSearchRadius] = useState(25);
+  const [locationError, setLocationError] = useState('');
 
   useEffect(() => {
     fetchQuestions();
     if (currentUser?.photos) {
       setPhotos(currentUser.photos);
+    }
+    if (currentUser?.location) {
+      setLocation(currentUser.location);
+    }
+    if (currentUser?.latitude && currentUser?.longitude) {
+      setCoordinates({ lat: currentUser.latitude, lng: currentUser.longitude });
+    }
+    if (currentUser?.search_radius) {
+      setSearchRadius(currentUser.search_radius);
     }
   }, []);
 
@@ -463,6 +478,99 @@ const ProfileSetupView = ({ token, currentUser, onComplete }) => {
       setQuestions(response.data.questions);
     } catch (err) {
       setError('Failed to load questions');
+    }
+  };
+
+  const getCurrentLocation = () => {
+    if (navigator.geolocation) {
+      setLoading(true);
+      setLocationError('');
+      
+      navigator.geolocation.getCurrentPosition(
+        async (position) => {
+          const { latitude, longitude } = position.coords;
+          setCoordinates({ lat: latitude, lng: longitude });
+          
+          // Reverse geocode to get address
+          try {
+            const response = await fetch(
+              `https://api.bigdatacloud.net/data/reverse-geocode-client?latitude=${latitude}&longitude=${longitude}&localityLanguage=en`
+            );
+            const data = await response.json();
+            const locationName = `${data.city}, ${data.principalSubdivision}`;
+            setLocation(locationName);
+          } catch (err) {
+            setLocation(`${latitude.toFixed(2)}, ${longitude.toFixed(2)}`);
+          }
+          
+          setLoading(false);
+        },
+        (error) => {
+          setLocationError('Unable to get your location. Please enter it manually.');
+          setLoading(false);
+        }
+      );
+    } else {
+      setLocationError('Geolocation is not supported by this browser.');
+    }
+  };
+
+  const searchLocation = async (query) => {
+    if (!query.trim()) return;
+    
+    setLoading(true);
+    setLocationError('');
+    
+    try {
+      // Using a free geocoding service
+      const response = await fetch(
+        `https://api.bigdatacloud.net/data/forward-geocode-client?query=${encodeURIComponent(query)}&localityLanguage=en`
+      );
+      const data = await response.json();
+      
+      if (data.results && data.results.length > 0) {
+        const result = data.results[0];
+        setCoordinates({ lat: result.latitude, lng: result.longitude });
+        setLocation(query);
+      } else {
+        setLocationError('Location not found. Please try a different search.');
+      }
+    } catch (err) {
+      setLocationError('Error searching for location. Please try again.');
+    }
+    
+    setLoading(false);
+  };
+
+  const saveLocation = async () => {
+    if (!location || !coordinates.lat || !coordinates.lng) {
+      setLocationError('Please select a location first.');
+      return false;
+    }
+
+    try {
+      setLoading(true);
+      await axios.post(`${API}/profile/location`, {
+        location: location,
+        latitude: coordinates.lat,
+        longitude: coordinates.lng
+      }, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      
+      // Also save search radius
+      await axios.put(`${API}/profile/search-preferences`, {
+        search_radius: searchRadius
+      }, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      
+      setLoading(false);
+      return true;
+    } catch (err) {
+      setError(err.response?.data?.detail || 'Failed to save location');
+      setLoading(false);
+      return false;
     }
   };
 
