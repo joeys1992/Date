@@ -1154,7 +1154,12 @@ const MainView = ({ token, currentUser, onLogout }) => {
                         {currentDisplayUser.first_name}, {currentDisplayUser.age}
                       </h2>
                       {currentDisplayUser.location && (
-                        <p className="text-white/80 text-sm">{currentDisplayUser.location}</p>
+                        <p className="text-white/80 text-sm">
+                          {currentDisplayUser.location}
+                          {currentDisplayUser.distance && (
+                            <span className="ml-2">• {currentDisplayUser.distance} miles away</span>
+                          )}
+                        </p>
                       )}
                       <p className="text-white/60 text-xs mt-1">
                         {currentDisplayUser.gender} • Looking for {currentDisplayUser.gender_preference}
