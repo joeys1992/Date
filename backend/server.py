@@ -624,6 +624,42 @@ async def get_my_profile(current_user_id: str = Depends(get_current_user)):
     
     return user_doc
 
+@api_router.post("/profile/location")
+async def update_location(
+    location_data: LocationUpdate,
+    current_user_id: str = Depends(get_current_user)
+):
+    """Update user location"""
+    # Validate coordinates
+    if not (-90 <= location_data.latitude <= 90):
+        raise HTTPException(status_code=400, detail="Invalid latitude")
+    if not (-180 <= location_data.longitude <= 180):
+        raise HTTPException(status_code=400, detail="Invalid longitude")
+    
+    await db.users.update_one(
+        {"id": current_user_id},
+        {"$set": {
+            "location": location_data.location,
+            "latitude": location_data.latitude,
+            "longitude": location_data.longitude
+        }}
+    )
+    
+    return {"message": "Location updated successfully"}
+
+@api_router.put("/profile/search-preferences")
+async def update_search_preferences(
+    preferences: SearchPreferences,
+    current_user_id: str = Depends(get_current_user)
+):
+    """Update search preferences"""
+    await db.users.update_one(
+        {"id": current_user_id},
+        {"$set": {"search_radius": preferences.search_radius}}
+    )
+    
+    return {"message": "Search preferences updated successfully"}
+
 @api_router.get("/discover")
 async def discover_users(
     current_user_id: str = Depends(get_current_user),
