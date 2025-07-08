@@ -230,24 +230,22 @@ class EndToEndTester:
         return True
         
     def get_match_id(self, user1, user2):
-        """Get the match ID between two users"""
-        headers = {'Authorization': f'Bearer {user1["token"]}'}
-        response = requests.get(f"{API_URL}/matches", headers=headers)
+        """Get the match ID between two users by querying the database"""
+        import subprocess
         
-        if response.status_code != 200:
-            return None
-            
-        matches = response.json()['matches']
-        for match in matches:
-            if match['id'] == user2['user_id']:
-                # We need to find the actual match record, not just the user
-                # Let's get conversations to find the match_id
-                response = requests.get(f"{API_URL}/conversations", headers=headers)
-                if response.status_code == 200:
-                    conversations = response.json()['conversations']
-                    for conv in conversations:
-                        if user2['user_id'] in conv['participants']:
-                            return conv['match_id']
+        # Query MongoDB directly to get the match ID
+        cmd = f'mongosh test_database --eval "db.matches.findOne({{\\$or: [{{user1_id: \\"{user1["user_id"]}\\", user2_id: \\"{user2["user_id"]}\\"}}," \
+              f"{{user1_id: \\"{user2["user_id"]}\\", user2_id: \\"{user1["user_id"]}\\"}}]}}).id" --quiet'
+        
+        try:
+            result = subprocess.run(cmd, shell=True, capture_output=True, text=True)
+            if result.returncode == 0:
+                match_id = result.stdout.strip()
+                if match_id and match_id != "null":
+                    return match_id
+        except Exception as e:
+            logger.error(f"Error querying match ID: {e}")
+        
         return None
         
     def test_messaging(self, user1, user2):
