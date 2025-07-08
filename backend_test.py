@@ -25,6 +25,14 @@ class DatingAppTester:
         self.tests_run = 0
         self.tests_passed = 0
         self.test_timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
+        
+        # For messaging tests
+        self.user1 = {"token": None, "user_id": None, "email": None}
+        self.user2 = {"token": None, "user_id": None, "email": None}
+        self.match_id = None
+        self.ws_messages_received = []
+        self.ws_connection = None
+        self.ws_thread = None
     
     def run_test(self, name, method, endpoint, expected_status, data=None, headers=None):
         """Run a single API test"""
