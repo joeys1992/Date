@@ -232,16 +232,36 @@ class DatingAppTester:
     
     def test_resend_verification(self):
         """Test resending verification email"""
-        if not self.email:
-            logger.error("No email available for resend test")
+        # Create a new unverified user for this test
+        email = f"unverified_resend_{self.test_timestamp}_{uuid.uuid4().hex[:8]}@example.com"
+        
+        data = {
+            "email": email,
+            "password": "TestPass123!",
+            "first_name": "Unverified",
+            "age": 25,
+            "gender": "male",
+            "gender_preference": "female"
+        }
+        
+        success, _ = self.run_test(
+            "Register User for Resend Test",
+            "POST",
+            "register",
+            200,
+            data=data
+        )
+        
+        if not success:
             return False
         
+        # Try to resend verification
         success, _ = self.run_test(
             "Resend Verification",
             "POST",
             "resend-verification",
             200,
-            data={"email": self.email}
+            data={"email": email}
         )
         
         return success
