@@ -41,25 +41,10 @@ def test_messaging_quick():
     })
     
     if response1.status_code != 200 or response2.status_code != 200:
-        logger.error("❌ Login failed, trying different emails...")
-        
-        # Try with more recent pattern based on the timestamp
-        user1_email = "alice_20250708_220021@testdating.com"
-        user2_email = "charlie_20250708_220021@testdating.com"
-        
-        response1 = requests.post(f"{API_URL}/login", json={
-            "email": user1_email,
-            "password": "TestPass123!"
-        })
-        
-        response2 = requests.post(f"{API_URL}/login", json={
-            "email": user2_email,
-            "password": "TestPass123!"
-        })
-        
-        if response1.status_code != 200 or response2.status_code != 200:
-            logger.error("❌ Could not login with any test credentials")
-            return False
+        logger.error("❌ Login failed")
+        logger.error(f"Response 1: {response1.status_code} - {response1.text}")
+        logger.error(f"Response 2: {response2.status_code} - {response2.text}")
+        return False
     
     token1 = response1.json()['access_token']
     token2 = response2.json()['access_token']
