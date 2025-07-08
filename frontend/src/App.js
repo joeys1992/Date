@@ -1692,4 +1692,143 @@ const ChatView = ({ conversation, currentUser, token, onBack }) => {
   );
 };
 
+// Location Settings Component
+const LocationSettings = ({ currentUser, token, onUpdate }) => {
+  const [location, setLocation] = useState(currentUser?.location || '');
+  const [searchRadius, setSearchRadius] = useState(currentUser?.search_radius || 25);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+  const [success, setSuccess] = useState('');
+
+  const getCurrentLocation = () => {
+    if (navigator.geolocation) {
+      setLoading(true);
+      setError('');
+      
+      navigator.geolocation.getCurrentPosition(
+        async (position) => {
+          const { latitude, longitude } = position.coords;
+          
+          try {
+            const response = await fetch(
+              `https://api.bigdatacloud.net/data/reverse-geocode-client?latitude=${latitude}&longitude=${longitude}&localityLanguage=en`
+            );
+            const data = await response.json();
+            const locationName = `${data.city}, ${data.principalSubdivision}`;
+            
+            // Update location in backend
+            await axios.post(`${API}/profile/location`, {
+              location: locationName,
+              latitude: latitude,
+              longitude: longitude
+            }, {
+              headers: { Authorization: `Bearer ${token}` }
+            });
+            
+            setLocation(locationName);
+            setSuccess('Location updated successfully!');
+            setTimeout(() => setSuccess(''), 3000);
+            onUpdate();
+          } catch (err) {
+            setError('Failed to update location');
+          }
+          
+          setLoading(false);
+        },
+        (error) => {
+          setError('Unable to get your location');
+          setLoading(false);
+        }
+      );
+    } else {
+      setError('Geolocation is not supported by this browser');
+    }
+  };
+
+  const updateSearchRadius = async (newRadius) => {
+    try {
+      setLoading(true);
+      await axios.put(`${API}/profile/search-preferences`, {
+        search_radius: newRadius
+      }, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      
+      setSearchRadius(newRadius);
+      setSuccess('Search radius updated!');
+      setTimeout(() => setSuccess(''), 3000);
+      onUpdate();
+    } catch (err) {
+      setError('Failed to update search radius');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="space-y-4">
+      <div>
+        <label className="block text-sm font-medium text-gray-700 mb-2">
+          Your Location
+        </label>
+        <div className="flex space-x-2">
+          <input
+            type="text"
+            value={location}
+            readOnly
+            placeholder="Location not set"
+            className="flex-1 px-3 py-2 border border-gray-300 rounded-lg bg-gray-50"
+          />
+          <button
+            onClick={getCurrentLocation}
+            disabled={loading}
+            className="px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 disabled:opacity-50"
+          >
+            {loading ? 'Getting...' : 'Update Location'}
+          </button>
+        </div>
+      </div>
+
+      <div>
+        <label className="block text-sm font-medium text-gray-700 mb-2">
+          Search Radius: {searchRadius} miles
+        </label>
+        <div className="px-3">
+          <input
+            type="range"
+            min="1"
+            max="50"
+            value={searchRadius}
+            onChange={(e) => {
+              const newRadius = parseInt(e.target.value);
+              setSearchRadius(newRadius);
+              updateSearchRadius(newRadius);
+            }}
+            className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer"
+            style={{
+              background: `linear-gradient(to right, #ec4899 0%, #ec4899 ${(searchRadius-1)/49*100}%, #e5e7eb ${(searchRadius-1)/49*100}%, #e5e7eb 100%)`
+            }}
+          />
+          <div className="flex justify-between text-xs text-gray-500 mt-1">
+            <span>1 mile</span>
+            <span>50 miles</span>
+          </div>
+        </div>
+      </div>
+
+      {error && (
+        <div className="bg-red-50 border border-red-200 text-red-700 px-3 py-2 rounded-lg text-sm">
+          {error}
+        </div>
+      )}
+
+      {success && (
+        <div className="bg-green-50 border border-green-200 text-green-700 px-3 py-2 rounded-lg text-sm">
+          {success}
+        </div>
+      )}
+    </div>
+  );
+};
+
 export default App;
