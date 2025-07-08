@@ -224,6 +224,9 @@ class User(BaseModel):
     photos: List[str] = []
     question_answers: List[QuestionAnswer] = []
     location: Optional[str] = None
+    latitude: Optional[float] = None
+    longitude: Optional[float] = None
+    search_radius: int = Field(default=25)  # Default 25 miles
     likes_given: List[str] = []  # User IDs this user has liked
     likes_received: List[str] = []  # User IDs who liked this user
     matches: List[str] = []  # Mutual matches
