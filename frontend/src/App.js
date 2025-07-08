@@ -1410,7 +1410,7 @@ const MainView = ({ token, currentUser, onLogout }) => {
               
               <div className="mt-6 pt-4 border-t">
                 <h3 className="font-semibold mb-3">Location Settings</h3>
-                <LocationSettings currentUser={currentUser} token={token} onUpdate={fetchUserProfile} />
+                <LocationSettings currentUser={currentUser} token={token} onUpdate={() => window.location.reload()} />
               </div>
             </div>
           </div>
