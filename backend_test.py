@@ -406,6 +406,29 @@ class DatingAppTester:
         
     def create_match(self, user1_data, user2_data):
         """Create a match between two users"""
+        # Debug: Get both user profiles to check gender and preferences
+        success, user1_profile = self.run_test(
+            "Get User 1 Profile",
+            "GET",
+            "profile/me",
+            200,
+            headers={'Authorization': f'Bearer {user1_data["token"]}'}
+        )
+        
+        if success:
+            logger.info(f"User 1 profile - Gender: {user1_profile.get('gender')}, Preference: {user1_profile.get('gender_preference')}")
+        
+        success, user2_profile = self.run_test(
+            "Get User 2 Profile",
+            "GET",
+            "profile/me",
+            200,
+            headers={'Authorization': f'Bearer {user2_data["token"]}'}
+        )
+        
+        if success:
+            logger.info(f"User 2 profile - Gender: {user2_profile.get('gender')}, Preference: {user2_profile.get('gender_preference')}")
+        
         # User 1 views User 2's profile
         success, _ = self.run_test(
             "User 1 Views User 2 Profile",
