@@ -924,7 +924,7 @@ const ProfileSetupView = ({ token, currentUser, onComplete }) => {
             </div>
           )}
 
-          {step === 2 && (
+          {step === 3 && (
             <div>
               <h2 className="text-xl font-semibold mb-4">Answer Questions</h2>
               <p className="text-gray-600 mb-6">Select and answer at least 3 questions (minimum 20 words each)</p>
@@ -969,7 +969,7 @@ const ProfileSetupView = ({ token, currentUser, onComplete }) => {
 
               <div className="flex space-x-4">
                 <button
-                  onClick={() => setStep(1)}
+                  onClick={() => setStep(2)}
                   className="flex-1 bg-gray-500 text-white py-2 px-4 rounded-lg hover:bg-gray-600"
                 >
                   Back to Photos
