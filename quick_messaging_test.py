@@ -17,18 +17,16 @@ API_URL = f"{BACKEND_URL}/api"
 def test_messaging_quick():
     """Test messaging with the known match IDs"""
     
-    # From the MongoDB output we saw earlier, let's use the most recent match
-    match_id = "b61b41f0-79dd-4560-8029-955827cd7396"
-    user1_id = "bc4a87f8-608a-43d4-bb10-5fd3a9233ed8"
-    user2_id = "e41ee4de-49c4-41fe-bda5-86123afed5d9"
+    # From the MongoDB output, let's use the most recent match
+    match_id = "9bbb4d71-5380-4e97-8324-170ea8122e71"
+    user1_id = "60dca719-7057-467a-8cb3-7144a3192d1c"
+    user2_id = "7e31856f-a068-46cd-bbea-ecf4b6367709"
+    user1_email = "alice_20250708_220153@testdating.com"
+    user2_email = "charlie_20250708_220153@testdating.com"
     
     logger.info(f"🔍 Testing with match: {match_id}")
-    logger.info(f"   User 1: {user1_id}")
-    logger.info(f"   User 2: {user2_id}")
-    
-    # Try to get user emails from recent registration logs
-    user1_email = "alice_20250708_220012@testdating.com"  # Common test email pattern
-    user2_email = "bob_20250708_220012@testdating.com"
+    logger.info(f"   User 1: {user1_email} ({user1_id})")
+    logger.info(f"   User 2: {user2_email} ({user2_id})")
     
     # Try login
     logger.info("🔑 Attempting login...")
