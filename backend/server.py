@@ -758,42 +758,71 @@ async def send_message(
     if current_user_id not in [match_doc["user1_id"], match_doc["user2_id"]]:
         raise HTTPException(status_code=403, detail="Not authorized to send messages in this conversation")
     
+    # Get recipient user ID
+    recipient_id = match_doc["user1_id"] if current_user_id == match_doc["user2_id"] else match_doc["user2_id"]
+    
+    # Check if conversation exists and if it's the first message
+    conversation = await db.conversations.find_one({"match_id": match_id})
+    is_first_message = conversation is None or not conversation.get("conversation_started", False)
+    
+    # If this is the first message, enforce special rules
+    if is_first_message:
+        # Must be a response to a question
+        if message_data.response_to_question is None:
+            raise HTTPException(status_code=400, detail="First message must be a response to one of the other user's profile questions")
+        
+        # Validate word count (minimum 20 words)
+        word_count = len(message_data.content.strip().split())
+        if word_count < 20:
+            raise HTTPException(status_code=400, detail=f"First message must be at least 20 words (currently {word_count})")
+        
+        # Validate that the question index is valid for the recipient
+        recipient_user = await db.users.find_one({"id": recipient_id})
+        if not recipient_user:
+            raise HTTPException(status_code=404, detail="Recipient user not found")
+        
+        question_answers = recipient_user.get("question_answers", [])
+        valid_question_indices = [qa.get("question_index") for qa in question_answers if qa.get("question_index") is not None]
+        
+        if message_data.response_to_question not in valid_question_indices:
+            raise HTTPException(status_code=400, detail="Invalid question index - must respond to one of the recipient's answered questions")
+    
     # Create message
     message = Message(
         match_id=match_id,
         sender_id=current_user_id,
         content=message_data.content,
-        message_type=message_data.message_type
+        message_type=message_data.message_type,
+        response_to_question=message_data.response_to_question
     )
     
     # Save to database
     await db.messages.insert_one(message.dict())
     
     # Update or create conversation
-    conversation = await db.conversations.find_one({"match_id": match_id})
     if not conversation:
         # Create new conversation
         new_conversation = Conversation(
             match_id=match_id,
             participants=[match_doc["user1_id"], match_doc["user2_id"]],
             last_message=message_data.content,
-            last_message_at=message.sent_at
+            last_message_at=message.sent_at,
+            conversation_started=True
         )
         await db.conversations.insert_one(new_conversation.dict())
     else:
         # Update existing conversation
+        update_data = {
+            "last_message": message_data.content,
+            "last_message_at": message.sent_at
+        }
+        if is_first_message:
+            update_data["conversation_started"] = True
+        
         await db.conversations.update_one(
             {"match_id": match_id},
-            {
-                "$set": {
-                    "last_message": message_data.content,
-                    "last_message_at": message.sent_at
-                }
-            }
+            {"$set": update_data}
         )
-    
-    # Get recipient user ID
-    recipient_id = match_doc["user1_id"] if current_user_id == match_doc["user2_id"] else match_doc["user2_id"]
     
     # Send real-time message to recipient
     await manager.send_personal_message({
@@ -804,6 +833,7 @@ async def send_message(
             "sender_id": current_user_id,
             "content": message_data.content,
             "message_type": message_data.message_type,
+            "response_to_question": message_data.response_to_question,
             "sent_at": message.sent_at.isoformat()
         }
     }, recipient_id)
