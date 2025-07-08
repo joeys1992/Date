@@ -201,6 +201,17 @@ class ProfileUpdate(BaseModel):
     bio: Optional[str] = None
     question_answers: Optional[List[QuestionAnswer]] = None
     location: Optional[str] = None
+    latitude: Optional[float] = None
+    longitude: Optional[float] = None
+    search_radius: Optional[int] = None  # in miles
+
+class LocationUpdate(BaseModel):
+    location: str
+    latitude: float
+    longitude: float
+
+class SearchPreferences(BaseModel):
+    search_radius: int = Field(default=25, ge=1, le=100)  # 1-100 miles
 
 class User(BaseModel):
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
