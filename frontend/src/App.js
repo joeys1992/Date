@@ -1393,6 +1393,12 @@ const MainView = ({ token, currentUser, onLogout }) => {
                 <strong>Looking for:</strong> {currentUser?.gender_preference}
               </div>
               <div>
+                <strong>Location:</strong> {currentUser?.location || 'Not set'}
+              </div>
+              <div>
+                <strong>Search Radius:</strong> {currentUser?.search_radius || 25} miles
+              </div>
+              <div>
                 <strong>Photos:</strong> {currentUser?.photos?.length || 0}
               </div>
               <div>
@@ -1400,6 +1406,11 @@ const MainView = ({ token, currentUser, onLogout }) => {
               </div>
               <div>
                 <strong>Email Verified:</strong> {currentUser?.email_verified ? '✅' : '❌'}
+              </div>
+              
+              <div className="mt-6 pt-4 border-t">
+                <h3 className="font-semibold mb-3">Location Settings</h3>
+                <LocationSettings currentUser={currentUser} token={token} onUpdate={fetchUserProfile} />
               </div>
             </div>
           </div>
