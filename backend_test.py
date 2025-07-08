@@ -826,6 +826,11 @@ class DatingAppTester:
             logger.error("❌ Resend verification test failed")
             # Continue with other tests
         
+        # Test 9: Test Messaging System
+        if not self.test_messaging_system():
+            logger.error("❌ Messaging system tests failed")
+            # Continue with other tests
+        
         # Print results
         logger.info(f"\n📊 Tests passed: {self.tests_passed}/{self.tests_run}")
         return self.tests_passed == self.tests_run
