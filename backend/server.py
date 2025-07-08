@@ -709,6 +709,191 @@ async def get_matches(current_user_id: str = Depends(get_current_user)):
     
     return {"matches": matches}
 
+# WebSocket endpoint for real-time messaging
+@app.websocket("/ws/{user_id}")
+async def websocket_endpoint(websocket: WebSocket, user_id: str):
+    # Validate user token from query params
+    token = websocket.query_params.get("token")
+    if not token:
+        await websocket.close(code=4001, reason="Token required")
+        return
+    
+    try:
+        payload = jwt.decode(token, JWT_SECRET, algorithms=[JWT_ALGORITHM])
+        token_user_id = payload.get("user_id")
+        if not token_user_id or token_user_id != user_id:
+            await websocket.close(code=4001, reason="Invalid token")
+            return
+    except jwt.JWTError:
+        await websocket.close(code=4001, reason="Invalid token")
+        return
+    
+    connection_id = await manager.connect(websocket, user_id)
+    
+    try:
+        while True:
+            data = await websocket.receive_text()
+            # Handle incoming messages if needed
+            # For now, we'll just keep the connection alive
+    except WebSocketDisconnect:
+        manager.disconnect(connection_id, user_id)
+
+# Messaging endpoints
+@api_router.post("/conversations/{match_id}/messages")
+async def send_message(
+    match_id: str,
+    message_data: MessageRequest,
+    current_user_id: str = Depends(get_current_user)
+):
+    """Send a message in a conversation"""
+    # Verify the match exists and user is part of it
+    match_doc = await db.matches.find_one({"id": match_id})
+    if not match_doc:
+        raise HTTPException(status_code=404, detail="Match not found")
+    
+    # Check if current user is part of this match
+    if current_user_id not in [match_doc["user1_id"], match_doc["user2_id"]]:
+        raise HTTPException(status_code=403, detail="Not authorized to send messages in this conversation")
+    
+    # Create message
+    message = Message(
+        match_id=match_id,
+        sender_id=current_user_id,
+        content=message_data.content,
+        message_type=message_data.message_type
+    )
+    
+    # Save to database
+    await db.messages.insert_one(message.dict())
+    
+    # Update or create conversation
+    conversation = await db.conversations.find_one({"match_id": match_id})
+    if not conversation:
+        # Create new conversation
+        new_conversation = Conversation(
+            match_id=match_id,
+            participants=[match_doc["user1_id"], match_doc["user2_id"]],
+            last_message=message_data.content,
+            last_message_at=message.sent_at
+        )
+        await db.conversations.insert_one(new_conversation.dict())
+    else:
+        # Update existing conversation
+        await db.conversations.update_one(
+            {"match_id": match_id},
+            {
+                "$set": {
+                    "last_message": message_data.content,
+                    "last_message_at": message.sent_at
+                }
+            }
+        )
+    
+    # Get recipient user ID
+    recipient_id = match_doc["user1_id"] if current_user_id == match_doc["user2_id"] else match_doc["user2_id"]
+    
+    # Send real-time message to recipient
+    await manager.send_personal_message({
+        "type": "new_message",
+        "message": {
+            "id": message.id,
+            "match_id": match_id,
+            "sender_id": current_user_id,
+            "content": message_data.content,
+            "message_type": message_data.message_type,
+            "sent_at": message.sent_at.isoformat()
+        }
+    }, recipient_id)
+    
+    return {"message": "Message sent successfully", "message_id": message.id}
+
+@api_router.get("/conversations/{match_id}/messages")
+async def get_messages(
+    match_id: str,
+    current_user_id: str = Depends(get_current_user),
+    limit: int = 50,
+    skip: int = 0
+):
+    """Get messages for a conversation"""
+    # Verify the match exists and user is part of it
+    match_doc = await db.matches.find_one({"id": match_id})
+    if not match_doc:
+        raise HTTPException(status_code=404, detail="Match not found")
+    
+    # Check if current user is part of this match
+    if current_user_id not in [match_doc["user1_id"], match_doc["user2_id"]]:
+        raise HTTPException(status_code=403, detail="Not authorized to view this conversation")
+    
+    # Get messages
+    cursor = db.messages.find({"match_id": match_id}).sort("sent_at", -1).skip(skip).limit(limit)
+    messages = []
+    async for message_doc in cursor:
+        message_doc.pop("_id", None)
+        messages.append(message_doc)
+    
+    # Reverse to get chronological order
+    messages.reverse()
+    
+    return {"messages": messages}
+
+@api_router.get("/conversations")
+async def get_conversations(current_user_id: str = Depends(get_current_user)):
+    """Get all conversations for the current user"""
+    # Get conversations where user is a participant
+    cursor = db.conversations.find({"participants": current_user_id}).sort("last_message_at", -1)
+    conversations = []
+    
+    async for conv_doc in cursor:
+        conv_doc.pop("_id", None)
+        
+        # Get the other participant's info
+        other_participant_id = None
+        for participant in conv_doc["participants"]:
+            if participant != current_user_id:
+                other_participant_id = participant
+                break
+        
+        if other_participant_id:
+            other_user = await db.users.find_one({"id": other_participant_id})
+            if other_user:
+                conv_doc["other_user"] = {
+                    "id": other_user["id"],
+                    "first_name": other_user["first_name"],
+                    "age": other_user["age"],
+                    "photos": other_user.get("photos", [])
+                }
+        
+        conversations.append(conv_doc)
+    
+    return {"conversations": conversations}
+
+@api_router.put("/conversations/{match_id}/messages/{message_id}/read")
+async def mark_message_as_read(
+    match_id: str,
+    message_id: str,
+    current_user_id: str = Depends(get_current_user)
+):
+    """Mark a message as read"""
+    # Verify the match exists and user is part of it
+    match_doc = await db.matches.find_one({"id": match_id})
+    if not match_doc:
+        raise HTTPException(status_code=404, detail="Match not found")
+    
+    # Check if current user is part of this match
+    if current_user_id not in [match_doc["user1_id"], match_doc["user2_id"]]:
+        raise HTTPException(status_code=403, detail="Not authorized")
+    
+    # Update message read status
+    result = await db.messages.update_one(
+        {"id": message_id, "match_id": match_id},
+        {"$set": {"read_at": datetime.utcnow()}}
+    )
+    
+    if result.matched_count == 0:
+        raise HTTPException(status_code=404, detail="Message not found")
+    
+    return {"message": "Message marked as read"}
+
 # Include the router in the main app
 app.include_router(api_router)
 
