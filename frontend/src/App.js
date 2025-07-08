@@ -681,13 +681,139 @@ const ProfileSetupView = ({ token, currentUser, onComplete }) => {
     }
   };
 
+  const handleNextStep = async () => {
+    if (step === 1) {
+      // Location step
+      const saved = await saveLocation();
+      if (saved) {
+        setStep(2);
+      }
+    } else if (step === 2) {
+      // Photos step
+      if (photos.length >= 3) {
+        setStep(3);
+      } else {
+        setError('Please upload at least 3 photos');
+      }
+    }
+  };
+
   return (
     <div className="min-h-screen p-4">
       <div className="max-w-2xl mx-auto">
         <div className="bg-white rounded-2xl shadow-xl p-8">
           <h1 className="text-2xl font-bold text-gray-800 mb-6">Complete Your Profile</h1>
           
+          {/* Progress indicator */}
+          <div className="flex justify-between items-center mb-8">
+            <div className={`flex items-center ${step >= 1 ? 'text-pink-600' : 'text-gray-400'}`}>
+              <div className={`w-8 h-8 rounded-full flex items-center justify-center ${step >= 1 ? 'bg-pink-600 text-white' : 'bg-gray-300'}`}>
+                1
+              </div>
+              <span className="ml-2 text-sm">Location</span>
+            </div>
+            <div className={`flex items-center ${step >= 2 ? 'text-pink-600' : 'text-gray-400'}`}>
+              <div className={`w-8 h-8 rounded-full flex items-center justify-center ${step >= 2 ? 'bg-pink-600 text-white' : 'bg-gray-300'}`}>
+                2
+              </div>
+              <span className="ml-2 text-sm">Photos</span>
+            </div>
+            <div className={`flex items-center ${step >= 3 ? 'text-pink-600' : 'text-gray-400'}`}>
+              <div className={`w-8 h-8 rounded-full flex items-center justify-center ${step >= 3 ? 'bg-pink-600 text-white' : 'bg-gray-300'}`}>
+                3
+              </div>
+              <span className="ml-2 text-sm">Questions</span>
+            </div>
+          </div>
+          
           {step === 1 && (
+            <div>
+              <h2 className="text-xl font-semibold mb-4">Set Your Location</h2>
+              <p className="text-gray-600 mb-6">Help us find people near you by setting your location and search radius.</p>
+              
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Your Location
+                  </label>
+                  <div className="flex space-x-2">
+                    <input
+                      type="text"
+                      value={location}
+                      onChange={(e) => setLocation(e.target.value)}
+                      placeholder="Enter city, state"
+                      className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-pink-500 focus:border-pink-500"
+                      onKeyPress={(e) => {
+                        if (e.key === 'Enter') {
+                          searchLocation(location);
+                        }
+                      }}
+                    />
+                    <button
+                      onClick={() => searchLocation(location)}
+                      disabled={loading}
+                      className="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 disabled:opacity-50"
+                    >
+                      Search
+                    </button>
+                    <button
+                      onClick={getCurrentLocation}
+                      disabled={loading}
+                      className="px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 disabled:opacity-50"
+                    >
+                      Use Current
+                    </button>
+                  </div>
+                  {locationError && (
+                    <p className="text-red-500 text-sm mt-1">{locationError}</p>
+                  )}
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Search Radius: {searchRadius} miles
+                  </label>
+                  <div className="px-3">
+                    <input
+                      type="range"
+                      min="1"
+                      max="50"
+                      value={searchRadius}
+                      onChange={(e) => setSearchRadius(parseInt(e.target.value))}
+                      className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer slider"
+                      style={{
+                        background: `linear-gradient(to right, #ec4899 0%, #ec4899 ${(searchRadius-1)/49*100}%, #e5e7eb ${(searchRadius-1)/49*100}%, #e5e7eb 100%)`
+                      }}
+                    />
+                    <div className="flex justify-between text-xs text-gray-500 mt-1">
+                      <span>1 mile</span>
+                      <span>50 miles</span>
+                    </div>
+                  </div>
+                </div>
+
+                {coordinates.lat && coordinates.lng && (
+                  <div className="bg-green-50 border border-green-200 rounded-lg p-3">
+                    <p className="text-green-800 text-sm">
+                      ✅ Location set: {location}
+                    </p>
+                  </div>
+                )}
+              </div>
+
+              <div className="mt-6">
+                <button
+                  onClick={handleNextStep}
+                  disabled={loading || !coordinates.lat || !coordinates.lng}
+                  className="w-full bg-pink-500 text-white py-2 px-4 rounded-lg hover:bg-pink-600 disabled:opacity-50"
+                >
+                  {loading ? 'Saving...' : 'Next: Add Photos'}
+                </button>
+              </div>
+            </div>
+          )}
+
+          {step === 2 && (
             <div>
               <h2 className="text-xl font-semibold mb-4">Add Your Photos</h2>
               <p className="text-gray-600 mb-6">Upload at least 3 photos to continue</p>
