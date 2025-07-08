@@ -183,7 +183,7 @@ backend:
 frontend:
   - task: "Messages tab in navigation"
     implemented: true
-    working: true
+    working: "NA"
     file: "App.js"
     stuck_count: 0
     priority: "high"
@@ -192,6 +192,9 @@ frontend:
       - working: true
         agent: "main"
         comment: "Added Messages tab to bottom navigation and conversation list view"
+      - working: "NA"
+        agent: "testing"
+        comment: "Unable to test due to authentication requirements. The application requires login credentials that are not available for testing."
 
   - task: "WebSocket connection for real-time messages"
     implemented: true
