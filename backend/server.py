@@ -235,9 +235,54 @@ class Message(BaseModel):
     match_id: str
     sender_id: str
     content: str
-    response_to_question: Optional[int] = None  # Index of question being responded to
+    message_type: str = "text"  # text, image, etc.
     sent_at: datetime = Field(default_factory=datetime.utcnow)
     read_at: Optional[datetime] = None
+    delivered_at: Optional[datetime] = None
+
+class Conversation(BaseModel):
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    match_id: str
+    participants: List[str]  # user IDs
+    last_message: Optional[str] = None
+    last_message_at: Optional[datetime] = None
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+
+class MessageRequest(BaseModel):
+    content: str
+    message_type: str = "text"
+
+# WebSocket connection manager
+class ConnectionManager:
+    def __init__(self):
+        self.active_connections: Dict[str, WebSocket] = {}
+        self.user_connections: Dict[str, str] = {}  # user_id -> connection_id
+    
+    async def connect(self, websocket: WebSocket, user_id: str):
+        await websocket.accept()
+        connection_id = str(uuid.uuid4())
+        self.active_connections[connection_id] = websocket
+        self.user_connections[user_id] = connection_id
+        return connection_id
+    
+    def disconnect(self, connection_id: str, user_id: str):
+        if connection_id in self.active_connections:
+            del self.active_connections[connection_id]
+        if user_id in self.user_connections:
+            del self.user_connections[user_id]
+    
+    async def send_personal_message(self, message: dict, user_id: str):
+        if user_id in self.user_connections:
+            connection_id = self.user_connections[user_id]
+            if connection_id in self.active_connections:
+                websocket = self.active_connections[connection_id]
+                try:
+                    await websocket.send_text(json.dumps(message))
+                except:
+                    # Connection is dead, remove it
+                    self.disconnect(connection_id, user_id)
+
+manager = ConnectionManager()
 
 # Utility Functions
 def hash_password(password: str) -> str:
