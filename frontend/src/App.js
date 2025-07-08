@@ -726,7 +726,66 @@ const ProfileSetupView = ({ token, currentUser, onComplete }) => {
             </div>
           </div>
           
-          {step === 1 && (
+          {step === 2 && (
+            <div>
+              <h2 className="text-xl font-semibold mb-4">Add Your Photos</h2>
+              <p className="text-gray-600 mb-6">Upload at least 3 photos to continue</p>
+              
+              <div className="grid grid-cols-3 gap-4 mb-6">
+                {photos.map((photo, index) => (
+                  <div key={index} className="aspect-square rounded-lg overflow-hidden bg-gray-100">
+                    <img src={photo} alt={`Photo ${index + 1}`} className="w-full h-full object-cover" />
+                  </div>
+                ))}
+                {photos.length < 10 && (
+                  <label className="aspect-square border-2 border-dashed border-gray-300 rounded-lg flex items-center justify-center cursor-pointer hover:border-pink-400">
+                    <input
+                      type="file"
+                      accept="image/*"
+                      onChange={handlePhotoUpload}
+                      className="hidden"
+                      disabled={loading}
+                    />
+                    <div className="text-center">
+                      {loading ? (
+                        <div className="text-2xl">⏳</div>
+                      ) : (
+                        <>
+                          <div className="text-3xl text-gray-400 mb-2">+</div>
+                          <div className="text-sm text-gray-500">Add Photo</div>
+                        </>
+                      )}
+                    </div>
+                  </label>
+                )}
+              </div>
+
+              {/* Debug info */}
+              <div className="mb-4 p-3 bg-gray-50 rounded-lg text-sm">
+                <p>Photos uploaded: {photos.length} / 3 required</p>
+                {loading && <p className="text-blue-600">Uploading photo...</p>}
+                {error && <p className="text-red-600">Error: {error}</p>}
+              </div>
+
+              <div className="flex space-x-4">
+                <button
+                  onClick={() => setStep(1)}
+                  className="flex-1 bg-gray-500 text-white py-2 px-4 rounded-lg hover:bg-gray-600"
+                >
+                  Back to Location
+                </button>
+                <button
+                  onClick={handleNextStep}
+                  disabled={photos.length < 3}
+                  className="flex-1 bg-pink-500 text-white py-2 px-4 rounded-lg hover:bg-pink-600 disabled:opacity-50"
+                >
+                  Next: Answer Questions
+                </button>
+              </div>
+            </div>
+          )}
+
+          {step === 3 && (
             <div>
               <h2 className="text-xl font-semibold mb-4">Set Your Location</h2>
               <p className="text-gray-600 mb-6">Help us find people near you by setting your location and search radius.</p>
