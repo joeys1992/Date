@@ -198,7 +198,7 @@ frontend:
 
   - task: "WebSocket connection for real-time messages"
     implemented: true
-    working: true
+    working: "NA"
     file: "App.js"
     stuck_count: 0
     priority: "high"
@@ -207,6 +207,9 @@ frontend:
       - working: true
         agent: "main"
         comment: "Implemented WebSocket connection with automatic reconnection"
+      - working: "NA"
+        agent: "testing"
+        comment: "Unable to test due to authentication requirements. The application requires login credentials that are not available for testing."
 
   - task: "ChatView component with question selection"
     implemented: true
