@@ -1023,6 +1023,61 @@ const MainView = ({ token, currentUser, onLogout }) => {
           </div>
         )}
 
+        {activeTab === 'messages' && (
+          <div>
+            {selectedConversation ? (
+              <ChatView
+                conversation={selectedConversation}
+                currentUser={currentUser}
+                token={token}
+                onBack={() => setSelectedConversation(null)}
+              />
+            ) : (
+              <div>
+                <h2 className="text-xl font-bold mb-4">Messages</h2>
+                {conversations.length > 0 ? (
+                  <div className="space-y-2">
+                    {conversations.map((conv) => (
+                      <div
+                        key={conv.id}
+                        onClick={() => setSelectedConversation(conv)}
+                        className="bg-white rounded-lg shadow-md p-4 cursor-pointer hover:bg-gray-50"
+                      >
+                        <div className="flex items-center space-x-3">
+                          <div className="w-12 h-12 bg-gray-100 rounded-full overflow-hidden">
+                            {conv.other_user?.photos?.[0] && (
+                              <img
+                                src={conv.other_user.photos[0]}
+                                alt={conv.other_user.first_name}
+                                className="w-full h-full object-cover"
+                              />
+                            )}
+                          </div>
+                          <div className="flex-1">
+                            <h3 className="font-medium">
+                              {conv.other_user?.first_name}, {conv.other_user?.age}
+                            </h3>
+                            <p className="text-sm text-gray-600 truncate">
+                              {conv.last_message || 'Start a conversation...'}
+                            </p>
+                          </div>
+                          <div className="text-xs text-gray-400">
+                            {conv.last_message_at && new Date(conv.last_message_at).toLocaleDateString()}
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="text-center py-12">
+                    <p className="text-gray-600">No conversations yet. Start by matching with someone!</p>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        )}
+
         {activeTab === 'profile' && (
           <div className="bg-white rounded-2xl shadow-xl p-6">
             <h2 className="text-xl font-bold mb-4">Your Profile</h2>
@@ -1069,10 +1124,258 @@ const MainView = ({ token, currentUser, onLogout }) => {
             💕 Matches
           </button>
           <button
+            onClick={() => setActiveTab('messages')}
+            className={`flex-1 py-3 text-center ${activeTab === 'messages' ? 'text-pink-600 bg-pink-50' : 'text-gray-600'}`}
+          >
+            💬 Messages
+          </button>
+          <button
             onClick={() => setActiveTab('profile')}
             className={`flex-1 py-3 text-center ${activeTab === 'profile' ? 'text-pink-600 bg-pink-50' : 'text-gray-600'}`}
           >
             👤 Profile
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// Chat View Component
+const ChatView = ({ conversation, currentUser, token, onBack }) => {
+  const [messages, setMessages] = useState([]);
+  const [newMessage, setNewMessage] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [conversationStarted, setConversationStarted] = useState(false);
+  const [availableQuestions, setAvailableQuestions] = useState([]);
+  const [selectedQuestion, setSelectedQuestion] = useState(null);
+  const [showQuestionSelection, setShowQuestionSelection] = useState(false);
+  const messagesEndRef = useRef(null);
+
+  useEffect(() => {
+    fetchMessages();
+    fetchConversationStatus();
+    fetchAvailableQuestions();
+  }, [conversation]);
+
+  useEffect(() => {
+    scrollToBottom();
+  }, [messages]);
+
+  const scrollToBottom = () => {
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  };
+
+  const fetchMessages = async () => {
+    try {
+      const response = await axios.get(`${API}/conversations/${conversation.match_id}/messages`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      setMessages(response.data.messages);
+    } catch (err) {
+      console.error('Failed to fetch messages:', err);
+    }
+  };
+
+  const fetchConversationStatus = async () => {
+    try {
+      const response = await axios.get(`${API}/conversations/${conversation.match_id}/status`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      setConversationStarted(response.data.conversation_started);
+    } catch (err) {
+      console.error('Failed to fetch conversation status:', err);
+    }
+  };
+
+  const fetchAvailableQuestions = async () => {
+    try {
+      const response = await axios.get(`${API}/conversations/${conversation.match_id}/questions`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      setAvailableQuestions(response.data.questions_with_answers);
+    } catch (err) {
+      console.error('Failed to fetch available questions:', err);
+    }
+  };
+
+  const sendMessage = async () => {
+    if (!newMessage.trim()) return;
+
+    // For first message, ensure a question is selected
+    if (!conversationStarted && !selectedQuestion) {
+      alert('Please select a question to respond to for your first message');
+      return;
+    }
+
+    // Check word count for first message
+    if (!conversationStarted) {
+      const wordCount = newMessage.trim().split(/\s+/).length;
+      if (wordCount < 20) {
+        alert(`First message must be at least 20 words (currently ${wordCount})`);
+        return;
+      }
+    }
+
+    try {
+      setLoading(true);
+      const payload = {
+        content: newMessage,
+        message_type: 'text'
+      };
+
+      if (!conversationStarted && selectedQuestion) {
+        payload.response_to_question = selectedQuestion.question_index;
+      }
+
+      await axios.post(`${API}/conversations/${conversation.match_id}/messages`, payload, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+
+      setNewMessage('');
+      setSelectedQuestion(null);
+      setShowQuestionSelection(false);
+      setConversationStarted(true);
+      fetchMessages();
+    } catch (err) {
+      alert(err.response?.data?.detail || 'Failed to send message');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const getWordCount = (text) => {
+    return text ? text.trim().split(/\s+/).length : 0;
+  };
+
+  return (
+    <div className="flex flex-col h-full">
+      {/* Header */}
+      <div className="bg-white shadow-sm border-b p-4 flex items-center space-x-3">
+        <button onClick={onBack} className="text-gray-600 hover:text-gray-800">
+          ← Back
+        </button>
+        <div className="w-8 h-8 bg-gray-100 rounded-full overflow-hidden">
+          {conversation.other_user?.photos?.[0] && (
+            <img
+              src={conversation.other_user.photos[0]}
+              alt={conversation.other_user.first_name}
+              className="w-full h-full object-cover"
+            />
+          )}
+        </div>
+        <div>
+          <h3 className="font-medium">
+            {conversation.other_user?.first_name}, {conversation.other_user?.age}
+          </h3>
+        </div>
+      </div>
+
+      {/* Messages */}
+      <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-gray-50">
+        {!conversationStarted && (
+          <div className="text-center py-4">
+            <p className="text-gray-600 text-sm">
+              Start the conversation by responding to one of {conversation.other_user?.first_name}'s profile questions.
+            </p>
+          </div>
+        )}
+        
+        {messages.map((message) => (
+          <div
+            key={message.id}
+            className={`flex ${message.sender_id === currentUser.id ? 'justify-end' : 'justify-start'}`}
+          >
+            <div
+              className={`max-w-xs lg:max-w-md px-4 py-2 rounded-lg ${
+                message.sender_id === currentUser.id
+                  ? 'bg-pink-500 text-white'
+                  : 'bg-white text-gray-900'
+              }`}
+            >
+              {message.response_to_question !== null && (
+                <div className="text-xs opacity-75 mb-1">
+                  Responding to: Question {message.response_to_question + 1}
+                </div>
+              )}
+              <p className="text-sm">{message.content}</p>
+              <div className="text-xs opacity-75 mt-1">
+                {new Date(message.sent_at).toLocaleTimeString()}
+              </div>
+            </div>
+          </div>
+        ))}
+        <div ref={messagesEndRef} />
+      </div>
+
+      {/* Question Selection for First Message */}
+      {!conversationStarted && showQuestionSelection && (
+        <div className="bg-white border-t p-4 max-h-60 overflow-y-auto">
+          <h4 className="font-medium mb-2">Select a question to respond to:</h4>
+          <div className="space-y-2">
+            {availableQuestions.map((qa) => (
+              <div
+                key={qa.question_index}
+                onClick={() => {
+                  setSelectedQuestion(qa);
+                  setShowQuestionSelection(false);
+                }}
+                className={`p-3 border rounded-lg cursor-pointer hover:bg-gray-50 ${
+                  selectedQuestion?.question_index === qa.question_index ? 'border-pink-500 bg-pink-50' : ''
+                }`}
+              >
+                <p className="font-medium text-sm mb-1">Q: {qa.question}</p>
+                <p className="text-gray-600 text-xs">{qa.answer}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Message Input */}
+      <div className="bg-white border-t p-4">
+        {!conversationStarted && selectedQuestion && (
+          <div className="mb-3 p-2 bg-pink-50 rounded-lg">
+            <p className="text-sm font-medium">Responding to:</p>
+            <p className="text-xs text-gray-600">{selectedQuestion.question}</p>
+          </div>
+        )}
+        
+        <div className="flex space-x-2">
+          {!conversationStarted && (
+            <button
+              onClick={() => setShowQuestionSelection(!showQuestionSelection)}
+              className="bg-gray-500 text-white px-3 py-2 rounded-lg hover:bg-gray-600"
+            >
+              {selectedQuestion ? 'Change' : 'Select'} Question
+            </button>
+          )}
+          
+          <div className="flex-1">
+            <textarea
+              value={newMessage}
+              onChange={(e) => setNewMessage(e.target.value)}
+              placeholder={
+                !conversationStarted
+                  ? "Write your response (minimum 20 words)..."
+                  : "Type a message..."
+              }
+              className="w-full p-2 border rounded-lg resize-none focus:ring-2 focus:ring-pink-500"
+              rows="2"
+            />
+            {!conversationStarted && (
+              <div className="text-xs text-gray-500 mt-1">
+                Words: {getWordCount(newMessage)} / 20 minimum
+              </div>
+            )}
+          </div>
+          
+          <button
+            onClick={sendMessage}
+            disabled={loading || !newMessage.trim() || (!conversationStarted && !selectedQuestion)}
+            className="bg-pink-500 text-white px-4 py-2 rounded-lg hover:bg-pink-600 disabled:opacity-50"
+          >
+            {loading ? 'Sending...' : 'Send'}
           </button>
         </div>
       </div>
