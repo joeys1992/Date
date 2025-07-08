@@ -968,6 +968,61 @@ const MainView = ({ token, currentUser, onLogout }) => {
           </div>
         )}
 
+        {activeTab === 'messages' && (
+          <div>
+            {selectedConversation ? (
+              <ChatView
+                conversation={selectedConversation}
+                currentUser={currentUser}
+                token={token}
+                onBack={() => setSelectedConversation(null)}
+              />
+            ) : (
+              <div>
+                <h2 className="text-xl font-bold mb-4">Messages</h2>
+                {conversations.length > 0 ? (
+                  <div className="space-y-2">
+                    {conversations.map((conv) => (
+                      <div
+                        key={conv.id}
+                        onClick={() => setSelectedConversation(conv)}
+                        className="bg-white rounded-lg shadow-md p-4 cursor-pointer hover:bg-gray-50"
+                      >
+                        <div className="flex items-center space-x-3">
+                          <div className="w-12 h-12 bg-gray-100 rounded-full overflow-hidden">
+                            {conv.other_user?.photos?.[0] && (
+                              <img
+                                src={conv.other_user.photos[0]}
+                                alt={conv.other_user.first_name}
+                                className="w-full h-full object-cover"
+                              />
+                            )}
+                          </div>
+                          <div className="flex-1">
+                            <h3 className="font-medium">
+                              {conv.other_user?.first_name}, {conv.other_user?.age}
+                            </h3>
+                            <p className="text-sm text-gray-600 truncate">
+                              {conv.last_message || 'Start a conversation...'}
+                            </p>
+                          </div>
+                          <div className="text-xs text-gray-400">
+                            {conv.last_message_at && new Date(conv.last_message_at).toLocaleDateString()}
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="text-center py-12">
+                    <p className="text-gray-600">No conversations yet. Start by matching with someone!</p>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        )}
+
         {activeTab === 'profile' && (
           <div className="bg-white rounded-2xl shadow-xl p-6">
             <h2 className="text-xl font-bold mb-4">Your Profile</h2>
