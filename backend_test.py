@@ -245,6 +245,523 @@ class DatingAppTester:
         )
         
         return success
+        
+    def create_test_user(self, gender, gender_preference, user_num):
+        """Create a test user with complete profile"""
+        # Generate unique email
+        email = f"test_user_{user_num}_{self.test_timestamp}_{uuid.uuid4().hex[:8]}@example.com"
+        
+        data = {
+            "email": email,
+            "password": "TestPass123!",
+            "first_name": f"Test{user_num}",
+            "age": 25 + user_num,
+            "gender": gender,
+            "gender_preference": gender_preference
+        }
+        
+        success, response = self.run_test(
+            f"Register User {user_num}",
+            "POST",
+            "register",
+            200,
+            data=data
+        )
+        
+        if not success:
+            return False, None
+            
+        user_id = response.get('user_id')
+        logger.info(f"Registered user {user_num} with email: {email}")
+        
+        # Extract verification token
+        time.sleep(2)  # Wait for email to be logged
+        verification_token = None
+        try:
+            with open("/tmp/verification_emails.log", "r") as f:
+                lines = f.readlines()
+                for line in reversed(lines):  # Start from the most recent
+                    if email in line:
+                        # Extract token from URL
+                        token_start = line.find("token=") + 6
+                        token_end = line.find("\n", token_start)
+                        if token_end == -1:
+                            token_end = len(line)
+                        verification_token = line[token_start:token_end]
+                        logger.info(f"Found verification token for user {user_num}")
+                        break
+        except Exception as e:
+            logger.error(f"Error reading verification log: {str(e)}")
+            return False, None
+            
+        if not verification_token:
+            logger.error(f"No verification token found for user {user_num}")
+            return False, None
+            
+        # Verify email
+        success, _ = self.run_test(
+            f"Verify Email for User {user_num}",
+            "POST",
+            "verify-email",
+            200,
+            data={"token": verification_token}
+        )
+        
+        if not success:
+            return False, None
+            
+        # Login
+        success, response = self.run_test(
+            f"Login User {user_num}",
+            "POST",
+            "login",
+            200,
+            data={"email": email, "password": "TestPass123!"}
+        )
+        
+        if not success or 'access_token' not in response:
+            return False, None
+            
+        token = response['access_token']
+        
+        return True, {
+            "email": email,
+            "user_id": user_id,
+            "token": token
+        }
+        
+    def setup_user_profile(self, user_data, num_questions=3):
+        """Set up user profile with questions and photos"""
+        # Get questions
+        headers = {'Authorization': f'Bearer {user_data["token"]}'}
+        success, questions_data = self.run_test(
+            f"Get Questions for {user_data['email']}",
+            "GET",
+            "profile/questions",
+            200,
+            headers=headers
+        )
+        
+        if not success or 'questions' not in questions_data:
+            return False
+            
+        # Answer questions
+        sample_answers = []
+        for i in range(num_questions):
+            if i < len(questions_data['questions']):
+                sample_answers.append({
+                    "question_index": questions_data['questions'][i]['index'],
+                    "answer": f"This is a detailed answer that is at least twenty words long so that it passes the validation check in the backend API. I enjoy hiking, reading, and traveling to new places. Testing is important."
+                })
+        
+        success, _ = self.run_test(
+            f"Update Profile for {user_data['email']}",
+            "PUT",
+            "profile",
+            200,
+            data={"question_answers": sample_answers},
+            headers=headers
+        )
+        
+        if not success:
+            return False
+            
+        # Add mock photos (3 photos)
+        for i in range(3):
+            # We can't actually upload photos in this test environment,
+            # so we'll just update the profile with a bio to simulate having photos
+            success, _ = self.run_test(
+                f"Update Bio for {user_data['email']}",
+                "PUT",
+                "profile",
+                200,
+                data={"bio": f"Test bio {i+1} for user profile"},
+                headers=headers
+            )
+            
+            if not success:
+                return False
+                
+        return True
+        
+    def create_match(self, user1_data, user2_data):
+        """Create a match between two users"""
+        # User 1 views User 2's profile
+        success, _ = self.run_test(
+            "User 1 Views User 2 Profile",
+            "POST",
+            f"profile/{user2_data['user_id']}/view",
+            200,
+            headers={'Authorization': f'Bearer {user1_data["token"]}'}
+        )
+        
+        if not success:
+            return False, None
+            
+        # User 2 views User 1's profile
+        success, _ = self.run_test(
+            "User 2 Views User 1 Profile",
+            "POST",
+            f"profile/{user1_data['user_id']}/view",
+            200,
+            headers={'Authorization': f'Bearer {user2_data["token"]}'}
+        )
+        
+        if not success:
+            return False, None
+            
+        # User 1 likes User 2
+        success, _ = self.run_test(
+            "User 1 Likes User 2",
+            "POST",
+            f"profile/{user2_data['user_id']}/like",
+            200,
+            headers={'Authorization': f'Bearer {user1_data["token"]}'}
+        )
+        
+        if not success:
+            return False, None
+            
+        # User 2 likes User 1 (creates match)
+        success, response = self.run_test(
+            "User 2 Likes User 1",
+            "POST",
+            f"profile/{user1_data['user_id']}/like",
+            200,
+            headers={'Authorization': f'Bearer {user2_data["token"]}'}
+        )
+        
+        if not success or not response.get('match', False):
+            logger.error("Match not created")
+            return False, None
+            
+        # Get matches for User 1 to find match_id
+        success, matches_response = self.run_test(
+            "Get User 1 Matches",
+            "GET",
+            "matches",
+            200,
+            headers={'Authorization': f'Bearer {user1_data["token"]}'}
+        )
+        
+        if not success or 'matches' not in matches_response:
+            return False, None
+            
+        # Find the match with User 2
+        match_id = None
+        for match in matches_response['matches']:
+            if match['id'] == user2_data['user_id']:
+                # Now we need to get the actual match_id by checking conversations
+                success, convos_response = self.run_test(
+                    "Get User 1 Conversations",
+                    "GET",
+                    "conversations",
+                    200,
+                    headers={'Authorization': f'Bearer {user1_data["token"]}'}
+                )
+                
+                if success and 'conversations' in convos_response:
+                    for convo in convos_response['conversations']:
+                        if user2_data['user_id'] in convo['participants']:
+                            match_id = convo['match_id']
+                            break
+                break
+                
+        if not match_id:
+            logger.error("Could not find match_id")
+            return False, None
+            
+        logger.info(f"Created match with ID: {match_id}")
+        return True, match_id
+        
+    def test_conversation_status(self, match_id, user_token):
+        """Test getting conversation status"""
+        success, response = self.run_test(
+            "Get Conversation Status",
+            "GET",
+            f"conversations/{match_id}/status",
+            200,
+            headers={'Authorization': f'Bearer {user_token}'}
+        )
+        
+        if not success:
+            return False, None
+            
+        return True, response.get('conversation_started', None)
+        
+    def test_conversation_questions(self, match_id, user_token):
+        """Test getting conversation questions"""
+        success, response = self.run_test(
+            "Get Conversation Questions",
+            "GET",
+            f"conversations/{match_id}/questions",
+            200,
+            headers={'Authorization': f'Bearer {user_token}'}
+        )
+        
+        if not success or 'questions_with_answers' not in response:
+            return False, None
+            
+        return True, response['questions_with_answers']
+        
+    def test_send_first_message(self, match_id, user_token, question_index, valid=True, enough_words=True):
+        """Test sending first message"""
+        content = "This is a detailed first message that responds to your question. I found your answer very interesting and would like to know more about it. I enjoy similar activities and would love to chat more about our shared interests." if enough_words else "Short message"
+        
+        data = {
+            "content": content,
+            "message_type": "text"
+        }
+        
+        if valid:
+            data["response_to_question"] = question_index
+            
+        expected_status = 200 if (valid and enough_words) else 400
+        
+        success, response = self.run_test(
+            f"Send First Message (valid={valid}, enough_words={enough_words})",
+            "POST",
+            f"conversations/{match_id}/messages",
+            expected_status,
+            data=data,
+            headers={'Authorization': f'Bearer {user_token}'}
+        )
+        
+        return success, response
+        
+    def test_get_messages(self, match_id, user_token):
+        """Test getting messages"""
+        success, response = self.run_test(
+            "Get Messages",
+            "GET",
+            f"conversations/{match_id}/messages",
+            200,
+            headers={'Authorization': f'Bearer {user_token}'}
+        )
+        
+        if not success or 'messages' not in response:
+            return False, None
+            
+        return True, response['messages']
+        
+    def test_get_conversations(self, user_token):
+        """Test getting conversations list"""
+        success, response = self.run_test(
+            "Get Conversations",
+            "GET",
+            "conversations",
+            200,
+            headers={'Authorization': f'Bearer {user_token}'}
+        )
+        
+        if not success or 'conversations' not in response:
+            return False, None
+            
+        return True, response['conversations']
+        
+    def test_send_normal_message(self, match_id, user_token, content="This is a normal message after the first message."):
+        """Test sending a normal message after first message"""
+        data = {
+            "content": content,
+            "message_type": "text"
+        }
+        
+        success, response = self.run_test(
+            "Send Normal Message",
+            "POST",
+            f"conversations/{match_id}/messages",
+            200,
+            data=data,
+            headers={'Authorization': f'Bearer {user_token}'}
+        )
+        
+        return success, response
+        
+    def on_ws_message(self, ws, message):
+        """Handle WebSocket messages"""
+        logger.info(f"WebSocket received: {message}")
+        self.ws_messages_received.append(json.loads(message))
+        
+    def on_ws_error(self, ws, error):
+        """Handle WebSocket errors"""
+        logger.error(f"WebSocket error: {error}")
+        
+    def on_ws_close(self, ws, close_status_code, close_msg):
+        """Handle WebSocket close"""
+        logger.info(f"WebSocket closed: {close_status_code} - {close_msg}")
+        
+    def on_ws_open(self, ws):
+        """Handle WebSocket open"""
+        logger.info("WebSocket connection established")
+        
+    def connect_websocket(self, user_token, user_id):
+        """Connect to WebSocket for real-time messaging"""
+        ws_app = websocket.WebSocketApp(
+            f"{WS_URL}/{user_id}?token={user_token}",
+            on_message=self.on_ws_message,
+            on_error=self.on_ws_error,
+            on_close=self.on_ws_close,
+            on_open=self.on_ws_open
+        )
+        
+        self.ws_connection = ws_app
+        
+        # Run WebSocket connection in a separate thread
+        self.ws_thread = threading.Thread(target=ws_app.run_forever)
+        self.ws_thread.daemon = True
+        self.ws_thread.start()
+        
+        # Give it time to connect
+        time.sleep(2)
+        
+        return True
+        
+    def test_messaging_system(self):
+        """Test the complete messaging system"""
+        logger.info("🚀 Starting Messaging System Tests")
+        
+        # Create two users with opposite genders and preferences
+        success, user1_data = self.create_test_user("male", "female", 1)
+        if not success:
+            logger.error("❌ Failed to create User 1")
+            return False
+            
+        self.user1 = user1_data
+        
+        success, user2_data = self.create_test_user("female", "male", 2)
+        if not success:
+            logger.error("❌ Failed to create User 2")
+            return False
+            
+        self.user2 = user2_data
+        
+        # Set up profiles with questions and photos
+        logger.info("Setting up User 1 profile...")
+        if not self.setup_user_profile(user1_data):
+            logger.error("❌ Failed to set up User 1 profile")
+            return False
+            
+        logger.info("Setting up User 2 profile...")
+        if not self.setup_user_profile(user2_data):
+            logger.error("❌ Failed to set up User 2 profile")
+            return False
+            
+        # Create a match between the users
+        logger.info("Creating match between users...")
+        success, match_id = self.create_match(user1_data, user2_data)
+        if not success:
+            logger.error("❌ Failed to create match")
+            return False
+            
+        self.match_id = match_id
+        
+        # Test conversation status (should be false initially)
+        logger.info("Testing conversation status...")
+        success, conversation_started = self.test_conversation_status(match_id, user1_data["token"])
+        if not success:
+            logger.error("❌ Failed to get conversation status")
+            return False
+            
+        if conversation_started:
+            logger.error("❌ Conversation should not be started yet")
+            return False
+            
+        logger.info("✅ Conversation status is correctly set to not started")
+        
+        # Test getting questions for first message
+        logger.info("Testing conversation questions...")
+        success, questions = self.test_conversation_questions(match_id, user1_data["token"])
+        if not success or not questions:
+            logger.error("❌ Failed to get conversation questions")
+            return False
+            
+        logger.info(f"✅ Retrieved {len(questions)} questions for first message")
+        
+        # Test error cases for first message
+        
+        # 1. Test sending first message without response_to_question
+        logger.info("Testing first message without response_to_question...")
+        success, _ = self.test_send_first_message(match_id, user1_data["token"], None, valid=False, enough_words=True)
+        if not success:
+            logger.error("❌ First message without response_to_question test failed")
+            return False
+            
+        logger.info("✅ First message without response_to_question correctly rejected")
+        
+        # 2. Test sending first message with too few words
+        logger.info("Testing first message with too few words...")
+        success, _ = self.test_send_first_message(match_id, user1_data["token"], questions[0]["question_index"], valid=True, enough_words=False)
+        if not success:
+            logger.error("❌ First message with too few words test failed")
+            return False
+            
+        logger.info("✅ First message with too few words correctly rejected")
+        
+        # Connect WebSocket for real-time messages
+        logger.info("Connecting WebSocket for User 2...")
+        if not self.connect_websocket(user2_data["token"], user2_data["user_id"]):
+            logger.error("❌ Failed to connect WebSocket")
+            # Continue with tests even if WebSocket fails
+        
+        # Send valid first message
+        logger.info("Sending valid first message...")
+        success, message_response = self.test_send_first_message(match_id, user1_data["token"], questions[0]["question_index"])
+        if not success:
+            logger.error("❌ Failed to send first message")
+            return False
+            
+        logger.info("✅ First message sent successfully")
+        
+        # Check if conversation status is now true
+        logger.info("Checking conversation status after first message...")
+        success, conversation_started = self.test_conversation_status(match_id, user1_data["token"])
+        if not success or not conversation_started:
+            logger.error("❌ Conversation status not updated after first message")
+            return False
+            
+        logger.info("✅ Conversation status correctly updated to started")
+        
+        # Get messages to verify first message was saved
+        logger.info("Getting messages to verify first message...")
+        success, messages = self.test_get_messages(match_id, user2_data["token"])
+        if not success or not messages or len(messages) == 0:
+            logger.error("❌ Failed to retrieve messages")
+            return False
+            
+        logger.info(f"✅ Retrieved {len(messages)} messages")
+        
+        # Check if WebSocket received the message
+        time.sleep(2)  # Wait for WebSocket to receive message
+        if self.ws_connection and len(self.ws_messages_received) > 0:
+            logger.info("✅ WebSocket received real-time message")
+        else:
+            logger.info("⚠️ WebSocket did not receive message or not connected")
+        
+        # Test sending normal message after first message
+        logger.info("Testing normal message after first message...")
+        success, _ = self.test_send_normal_message(match_id, user2_data["token"])
+        if not success:
+            logger.error("❌ Failed to send normal message")
+            return False
+            
+        logger.info("✅ Normal message sent successfully")
+        
+        # Get conversations list
+        logger.info("Getting conversations list...")
+        success, conversations = self.test_get_conversations(user1_data["token"])
+        if not success or not conversations:
+            logger.error("❌ Failed to get conversations")
+            return False
+            
+        logger.info(f"✅ Retrieved {len(conversations)} conversations")
+        
+        # Clean up WebSocket connection
+        if self.ws_connection:
+            self.ws_connection.close()
+            self.ws_thread.join(timeout=1)
+        
+        logger.info("✅ All messaging system tests completed successfully")
+        return True
     
     def run_all_tests(self):
         """Run all tests in sequence"""
