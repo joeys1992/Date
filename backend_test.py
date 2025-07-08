@@ -620,7 +620,8 @@ class DatingAppTester:
         """Test the complete messaging system"""
         logger.info("🚀 Starting Messaging System Tests")
         
-        # Create two users with opposite genders and preferences
+        # Create two users with compatible genders and preferences
+        # First user: male seeking female
         success, user1_data = self.create_test_user("male", "female", 1)
         if not success:
             logger.error("❌ Failed to create User 1")
@@ -628,6 +629,7 @@ class DatingAppTester:
             
         self.user1 = user1_data
         
+        # Second user: female seeking male
         success, user2_data = self.create_test_user("female", "male", 2)
         if not success:
             logger.error("❌ Failed to create User 2")
