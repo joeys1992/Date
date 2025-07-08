@@ -690,7 +690,7 @@ class DatingAppTester:
             
         self.user1 = user1_data
         
-        # Second user: female seeking male
+        # Second user: female seeking male (must be opposite of user1)
         success, user2_data = self.create_test_user("female", "male", 2)
         if not success:
             logger.error("❌ Failed to create User 2")
