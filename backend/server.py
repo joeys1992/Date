@@ -236,6 +236,7 @@ class Message(BaseModel):
     sender_id: str
     content: str
     message_type: str = "text"  # text, image, etc.
+    response_to_question: Optional[int] = None  # Index of question being responded to (for first message)
     sent_at: datetime = Field(default_factory=datetime.utcnow)
     read_at: Optional[datetime] = None
     delivered_at: Optional[datetime] = None
@@ -246,11 +247,13 @@ class Conversation(BaseModel):
     participants: List[str]  # user IDs
     last_message: Optional[str] = None
     last_message_at: Optional[datetime] = None
+    conversation_started: bool = False  # Track if first message has been sent
     created_at: datetime = Field(default_factory=datetime.utcnow)
 
 class MessageRequest(BaseModel):
     content: str
     message_type: str = "text"
+    response_to_question: Optional[int] = None  # Required for first message
 
 # WebSocket connection manager
 class ConnectionManager:
