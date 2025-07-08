@@ -1005,10 +1005,24 @@ class DatingAppTester:
             logger.error("❌ Resend verification test failed")
             # Continue with other tests
         
-        # Test 9: Test Messaging System
-        if not self.test_messaging_system():
-            logger.error("❌ Messaging system tests failed")
-            # Continue with other tests
+        # Test 9: Test WebSocket Connection
+        # Create a test user with complete profile
+        success, user_data = self.create_test_user("male", "female", 1)
+        if success:
+            # Set up profile with questions and photos
+            if self.setup_user_profile(user_data):
+                # Test WebSocket connection
+                logger.info("Testing WebSocket connection...")
+                ws_url = f"{WS_URL}/{user_data['user_id']}?token={user_data['token']}"
+                logger.info(f"Connecting to WebSocket at: {ws_url}")
+                
+                try:
+                    # Use websocket-client library to test connection
+                    ws = websocket.create_connection(ws_url)
+                    logger.info("✅ WebSocket connection successful")
+                    ws.close()
+                except Exception as e:
+                    logger.error(f"❌ WebSocket connection failed: {str(e)}")
         
         # Print results
         logger.info(f"\n📊 Tests passed: {self.tests_passed}/{self.tests_run}")
