@@ -275,15 +275,18 @@ backend:
 
   - task: "Photo Verification System"
     implemented: true
-    working: false
+    working: true
     file: "server.py"
     stuck_count: 0
     priority: "high"
-    needs_retesting: true
+    needs_retesting: false
     status_history:
       - working: false
         agent: "main"
         comment: "Added photo verification endpoint with face comparison, auto-approval logic, and verification status tracking. Users can submit selfies for verification."
+      - working: true
+        agent: "testing"
+        comment: "Photo verification system is working correctly. POST /api/profile/verify-photo accepts base64 images and performs face comparison with auto-approval logic (85% similarity threshold). GET /api/profile/verification-status returns current status. System correctly rejects duplicate verification attempts and requires profile photos to be uploaded first. Face comparison mock returns similarity scores between 0.7-0.95 and auto-approves at 85%+ similarity."
 
   - task: "User Blocking System"
     implemented: true
