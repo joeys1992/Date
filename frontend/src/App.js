@@ -1404,10 +1404,18 @@ const MainView = ({ token, currentUser, onLogout }) => {
               <div>
                 <strong>Email Verified:</strong> {currentUser?.email_verified ? '✅' : '❌'}
               </div>
+              <div>
+                <strong>Photo Verified:</strong> {currentUser?.photo_verified ? '✅' : '❌'}
+              </div>
               
               <div className="mt-6 pt-4 border-t">
                 <h3 className="font-semibold mb-3">Location Settings</h3>
                 <LocationSettings currentUser={currentUser} token={token} onUpdate={() => window.location.reload()} />
+              </div>
+              
+              <div className="mt-6 pt-4 border-t">
+                <h3 className="font-semibold mb-3">Safety & Security</h3>
+                <SafetyCenter currentUser={currentUser} token={token} onUpdate={() => window.location.reload()} />
               </div>
             </div>
           </div>
