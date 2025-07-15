@@ -523,6 +523,83 @@ def should_auto_approve_verification(similarity_score: float) -> bool:
     """Determine if photo verification should be auto-approved based on similarity score"""
     return similarity_score >= 0.85  # 85% similarity threshold for auto-approval
 
+async def initialize_safety_tips():
+    """Initialize safety tips in the database"""
+    existing_tips = await db.safety_tips.count_documents({})
+    if existing_tips > 0:
+        return  # Tips already exist
+    
+    safety_tips = [
+        {
+            "title": "Meet in Public Places",
+            "content": "Always meet your matches in public, well-lit places for the first few dates. Avoid meeting at your home or theirs until you feel completely comfortable.",
+            "category": "meeting_safety",
+            "priority": 1,
+            "active": True,
+            "created_at": datetime.utcnow()
+        },
+        {
+            "title": "Tell Someone Your Plans",
+            "content": "Let a trusted friend or family member know where you're going, who you're meeting, and when you expect to be back. Consider sharing your live location.",
+            "category": "meeting_safety",
+            "priority": 2,
+            "active": True,
+            "created_at": datetime.utcnow()
+        },
+        {
+            "title": "Trust Your Instincts",
+            "content": "If something feels off or uncomfortable, trust your gut. You have the right to leave any situation that makes you uncomfortable.",
+            "category": "personal_safety",
+            "priority": 3,
+            "active": True,
+            "created_at": datetime.utcnow()
+        },
+        {
+            "title": "Video Chat First",
+            "content": "Consider having a video call before meeting in person. This helps verify the person matches their profile and gives you a better sense of their personality.",
+            "category": "online_safety",
+            "priority": 4,
+            "active": True,
+            "created_at": datetime.utcnow()
+        },
+        {
+            "title": "Don't Share Personal Information",
+            "content": "Avoid sharing sensitive information like your home address, workplace details, or financial information until you know someone well.",
+            "category": "privacy",
+            "priority": 5,
+            "active": True,
+            "created_at": datetime.utcnow()
+        },
+        {
+            "title": "Report Suspicious Behavior",
+            "content": "If someone makes you uncomfortable, sends inappropriate messages, or violates our community guidelines, please report them immediately.",
+            "category": "reporting",
+            "priority": 6,
+            "active": True,
+            "created_at": datetime.utcnow()
+        },
+        {
+            "title": "Use the App's Messaging System",
+            "content": "Keep conversations within the app until you feel comfortable sharing your phone number. This provides an additional layer of safety.",
+            "category": "online_safety",
+            "priority": 7,
+            "active": True,
+            "created_at": datetime.utcnow()
+        },
+        {
+            "title": "Be Cautious with Alcohol",
+            "content": "If you choose to drink on a date, do so responsibly. Don't leave your drink unattended, and consider arranging your own transportation.",
+            "category": "meeting_safety",
+            "priority": 8,
+            "active": True,
+            "created_at": datetime.utcnow()
+        }
+    ]
+    
+    for tip in safety_tips:
+        tip["id"] = str(uuid.uuid4())
+        await db.safety_tips.insert_one(tip)
+
 # API Routes
 @api_router.post("/register")
 async def register(
