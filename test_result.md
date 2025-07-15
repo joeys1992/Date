@@ -507,12 +507,11 @@ metadata:
 
 test_plan:
   current_focus:
-    - "Location management with coordinates"
-    - "Distance calculation using haversine formula" 
-    - "Search radius preferences (1-100 miles)"
-    - "Location-based discovery filtering"
-    - "Touch-friendly radius slider (1-50+ miles)"
-    - "Geolocation integration"
+    - "Photo Verification System"
+    - "User Blocking System"
+    - "User Reporting System"
+    - "Safety Center API"
+    - "Safety Tips Database"
   stuck_tasks: []
   test_all: true
   test_priority: "high_first"
