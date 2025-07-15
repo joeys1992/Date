@@ -1833,4 +1833,361 @@ const LocationSettings = ({ currentUser, token, onUpdate }) => {
   );
 };
 
+// Safety Center Component
+const SafetyCenter = ({ currentUser, token, onUpdate }) => {
+  const [activeSection, setActiveSection] = useState('overview');
+  const [verificationStatus, setVerificationStatus] = useState(null);
+  const [blockedUsers, setBlockedUsers] = useState([]);
+  const [safetyTips, setSafetyTips] = useState([]);
+  const [safetyStats, setSafetyStats] = useState({});
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+  const [success, setSuccess] = useState('');
+
+  useEffect(() => {
+    fetchVerificationStatus();
+    fetchBlockedUsers();
+    fetchSafetyTips();
+    fetchSafetyStats();
+  }, []);
+
+  const fetchVerificationStatus = async () => {
+    try {
+      const response = await axios.get(`${API}/profile/verification-status`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      setVerificationStatus(response.data);
+    } catch (err) {
+      console.error('Failed to fetch verification status:', err);
+    }
+  };
+
+  const fetchBlockedUsers = async () => {
+    try {
+      const response = await axios.get(`${API}/users/blocked`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      setBlockedUsers(response.data.blocked_users);
+    } catch (err) {
+      console.error('Failed to fetch blocked users:', err);
+    }
+  };
+
+  const fetchSafetyTips = async () => {
+    try {
+      const response = await axios.get(`${API}/safety/tips`);
+      setSafetyTips(response.data.tips);
+    } catch (err) {
+      console.error('Failed to fetch safety tips:', err);
+    }
+  };
+
+  const fetchSafetyStats = async () => {
+    try {
+      const response = await axios.get(`${API}/safety/stats`);
+      setSafetyStats(response.data);
+    } catch (err) {
+      console.error('Failed to fetch safety stats:', err);
+    }
+  };
+
+  const handlePhotoVerification = async (event) => {
+    const file = event.target.files[0];
+    if (!file) return;
+
+    setLoading(true);
+    setError('');
+    setSuccess('');
+
+    try {
+      // Convert image to base64
+      const reader = new FileReader();
+      reader.onloadend = async () => {
+        const base64String = reader.result.split(',')[1];
+        
+        const response = await axios.post(`${API}/profile/verify-photo`, {
+          verification_photo: base64String
+        }, {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+
+        setSuccess(response.data.message);
+        fetchVerificationStatus();
+        onUpdate();
+      };
+      reader.readAsDataURL(file);
+    } catch (err) {
+      setError(err.response?.data?.detail || 'Failed to submit verification');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const unblockUser = async (userId) => {
+    try {
+      setLoading(true);
+      await axios.post(`${API}/users/${userId}/unblock`, {}, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      setSuccess('User unblocked successfully');
+      fetchBlockedUsers();
+      setTimeout(() => setSuccess(''), 3000);
+    } catch (err) {
+      setError(err.response?.data?.detail || 'Failed to unblock user');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const triggerPanicButton = async () => {
+    if (!confirm('Are you sure you want to trigger the panic button? This will alert emergency contacts and log your location.')) {
+      return;
+    }
+
+    try {
+      setLoading(true);
+      const response = await axios.post(`${API}/safety/panic`, {}, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      setSuccess(response.data.message);
+    } catch (err) {
+      setError(err.response?.data?.detail || 'Failed to trigger panic button');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="space-y-4">
+      {/* Section Navigation */}
+      <div className="flex space-x-2 border-b">
+        <button
+          onClick={() => setActiveSection('overview')}
+          className={`px-3 py-2 text-sm font-medium ${
+            activeSection === 'overview' ? 'border-b-2 border-pink-500 text-pink-600' : 'text-gray-600'
+          }`}
+        >
+          Overview
+        </button>
+        <button
+          onClick={() => setActiveSection('verification')}
+          className={`px-3 py-2 text-sm font-medium ${
+            activeSection === 'verification' ? 'border-b-2 border-pink-500 text-pink-600' : 'text-gray-600'
+          }`}
+        >
+          Verification
+        </button>
+        <button
+          onClick={() => setActiveSection('blocked')}
+          className={`px-3 py-2 text-sm font-medium ${
+            activeSection === 'blocked' ? 'border-b-2 border-pink-500 text-pink-600' : 'text-gray-600'
+          }`}
+        >
+          Blocked Users
+        </button>
+        <button
+          onClick={() => setActiveSection('tips')}
+          className={`px-3 py-2 text-sm font-medium ${
+            activeSection === 'tips' ? 'border-b-2 border-pink-500 text-pink-600' : 'text-gray-600'
+          }`}
+        >
+          Safety Tips
+        </button>
+      </div>
+
+      {/* Overview Section */}
+      {activeSection === 'overview' && (
+        <div className="space-y-4">
+          <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+            <h4 className="font-semibold text-blue-800 mb-2">Safety Statistics</h4>
+            <div className="grid grid-cols-2 gap-4 text-sm">
+              <div>
+                <div className="font-medium">Verified Users</div>
+                <div className="text-blue-600">{safetyStats.verified_users || 0}</div>
+              </div>
+              <div>
+                <div className="font-medium">Verification Rate</div>
+                <div className="text-blue-600">{(safetyStats.verification_rate || 0).toFixed(1)}%</div>
+              </div>
+            </div>
+          </div>
+
+          <div className="bg-green-50 border border-green-200 rounded-lg p-4">
+            <h4 className="font-semibold text-green-800 mb-2">Your Safety Status</h4>
+            <div className="space-y-2 text-sm">
+              <div className="flex justify-between">
+                <span>Email Verified:</span>
+                <span>{currentUser?.email_verified ? '✅' : '❌'}</span>
+              </div>
+              <div className="flex justify-between">
+                <span>Photo Verified:</span>
+                <span>{currentUser?.photo_verified ? '✅' : '❌'}</span>
+              </div>
+              <div className="flex justify-between">
+                <span>Blocked Users:</span>
+                <span>{blockedUsers.length}</span>
+              </div>
+            </div>
+          </div>
+
+          <button
+            onClick={triggerPanicButton}
+            disabled={loading}
+            className="w-full bg-red-500 text-white py-3 px-4 rounded-lg hover:bg-red-600 disabled:opacity-50 font-semibold"
+          >
+            🚨 Emergency Panic Button
+          </button>
+        </div>
+      )}
+
+      {/* Verification Section */}
+      {activeSection === 'verification' && (
+        <div className="space-y-4">
+          <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+            <h4 className="font-semibold text-yellow-800 mb-2">Photo Verification</h4>
+            <p className="text-sm text-yellow-700 mb-3">
+              Verify your photos to increase trust and get more matches.
+            </p>
+            
+            {verificationStatus && (
+              <div className="mb-4">
+                <div className="flex justify-between text-sm">
+                  <span>Status:</span>
+                  <span className={`capitalize ${
+                    verificationStatus.verification_status === 'approved' ? 'text-green-600' :
+                    verificationStatus.verification_status === 'pending' ? 'text-yellow-600' :
+                    'text-red-600'
+                  }`}>
+                    {verificationStatus.verification_status}
+                  </span>
+                </div>
+              </div>
+            )}
+
+            {!currentUser?.photo_verified && (
+              <div>
+                <input
+                  type="file"
+                  accept="image/*"
+                  onChange={handlePhotoVerification}
+                  className="hidden"
+                  id="verification-photo"
+                  disabled={loading}
+                />
+                <label
+                  htmlFor="verification-photo"
+                  className="inline-block w-full bg-blue-500 text-white py-2 px-4 rounded-lg hover:bg-blue-600 text-center cursor-pointer disabled:opacity-50"
+                >
+                  {loading ? 'Uploading...' : 'Upload Verification Photo'}
+                </label>
+                <p className="text-xs text-gray-500 mt-1">
+                  Take a clear selfie that matches your profile photos
+                </p>
+              </div>
+            )}
+
+            {currentUser?.photo_verified && (
+              <div className="bg-green-100 border border-green-300 rounded-lg p-3">
+                <p className="text-green-700 text-sm font-medium">
+                  ✅ Your photos are verified!
+                </p>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Blocked Users Section */}
+      {activeSection === 'blocked' && (
+        <div className="space-y-4">
+          <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+            <h4 className="font-semibold text-red-800 mb-2">Blocked Users</h4>
+            <p className="text-sm text-red-700 mb-3">
+              Users you've blocked won't appear in your discover feed or be able to message you.
+            </p>
+            
+            {blockedUsers.length === 0 ? (
+              <p className="text-gray-600 text-sm">No blocked users</p>
+            ) : (
+              <div className="space-y-2">
+                {blockedUsers.map((user) => (
+                  <div key={user.id} className="flex items-center justify-between bg-white p-3 rounded-lg">
+                    <div className="flex items-center space-x-3">
+                      <div className="w-10 h-10 bg-gray-100 rounded-full overflow-hidden">
+                        {user.photos?.[0] && (
+                          <img
+                            src={user.photos[0]}
+                            alt={user.first_name}
+                            className="w-full h-full object-cover"
+                          />
+                        )}
+                      </div>
+                      <div>
+                        <div className="font-medium">{user.first_name}</div>
+                        <div className="text-sm text-gray-500">{user.age} years old</div>
+                      </div>
+                    </div>
+                    <button
+                      onClick={() => unblockUser(user.id)}
+                      disabled={loading}
+                      className="px-3 py-1 bg-gray-500 text-white rounded hover:bg-gray-600 disabled:opacity-50 text-sm"
+                    >
+                      Unblock
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Safety Tips Section */}
+      {activeSection === 'tips' && (
+        <div className="space-y-4">
+          <div className="bg-purple-50 border border-purple-200 rounded-lg p-4">
+            <h4 className="font-semibold text-purple-800 mb-2">Safety Tips</h4>
+            <div className="space-y-3">
+              {safetyTips.map((tip, index) => (
+                <div key={tip.id || index} className="bg-white p-3 rounded-lg">
+                  <h5 className="font-medium text-purple-800 mb-1">{tip.title}</h5>
+                  <p className="text-sm text-purple-700">{tip.content}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+          
+          <div className="bg-orange-50 border border-orange-200 rounded-lg p-4">
+            <h4 className="font-semibold text-orange-800 mb-2">Need Help?</h4>
+            <p className="text-sm text-orange-700 mb-3">
+              If you're experiencing harassment or feel unsafe, don't hesitate to report users or contact our support team.
+            </p>
+            <div className="space-y-2">
+              <button className="w-full bg-orange-500 text-white py-2 px-4 rounded-lg hover:bg-orange-600 text-sm">
+                Report a User
+              </button>
+              <button className="w-full bg-gray-500 text-white py-2 px-4 rounded-lg hover:bg-gray-600 text-sm">
+                Contact Support
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Status Messages */}
+      {error && (
+        <div className="bg-red-50 border border-red-200 text-red-700 px-3 py-2 rounded-lg text-sm">
+          {error}
+        </div>
+      )}
+
+      {success && (
+        <div className="bg-green-50 border border-green-200 text-green-700 px-3 py-2 rounded-lg text-sm">
+          {success}
+        </div>
+      )}
+    </div>
+  );
+};
+
 export default App;
