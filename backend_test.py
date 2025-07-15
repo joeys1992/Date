@@ -942,6 +942,551 @@ class DatingAppTester:
         logger.info("✅ All messaging system tests completed successfully")
         return True
     
+    def test_photo_verification_system(self):
+        """Test photo verification endpoints"""
+        logger.info("🚀 Starting Photo Verification System Tests")
+        
+        # Create a test user
+        success, user_data = self.create_test_user("female", "male", 1)
+        if not success:
+            logger.error("❌ Failed to create test user for photo verification")
+            return False
+        
+        # Set up user profile with photos (simulated)
+        if not self.setup_user_profile(user_data):
+            logger.error("❌ Failed to set up user profile")
+            return False
+        
+        headers = {'Authorization': f'Bearer {user_data["token"]}'}
+        
+        # Test 1: Get initial verification status
+        success, response = self.run_test(
+            "Get Initial Verification Status",
+            "GET",
+            "profile/verification-status",
+            200,
+            headers=headers
+        )
+        
+        if success:
+            logger.info(f"Initial verification status: {response}")
+        
+        # Test 2: Submit photo verification with base64 image
+        # Create a mock base64 image
+        mock_base64_image = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=="
+        
+        verification_data = {
+            "verification_photo": mock_base64_image
+        }
+        
+        success, response = self.run_test(
+            "Submit Photo Verification",
+            "POST",
+            "profile/verify-photo",
+            200,
+            data=verification_data,
+            headers=headers
+        )
+        
+        if success:
+            verification_id = response.get('verification_id')
+            status = response.get('status')
+            logger.info(f"Photo verification submitted - ID: {verification_id}, Status: {status}")
+        
+        # Test 3: Get verification status after submission
+        success, response = self.run_test(
+            "Get Verification Status After Submission",
+            "GET",
+            "profile/verification-status",
+            200,
+            headers=headers
+        )
+        
+        if success:
+            logger.info(f"Verification status after submission: {response}")
+        
+        # Test 4: Try to submit another verification (should fail)
+        success, response = self.run_test(
+            "Submit Duplicate Photo Verification",
+            "POST",
+            "profile/verify-photo",
+            400,  # Should fail with 400
+            data=verification_data,
+            headers=headers
+        )
+        
+        if success:
+            logger.info("✅ Duplicate verification correctly rejected")
+        
+        logger.info("✅ Photo Verification System tests completed")
+        return True
+    
+    def test_user_blocking_system(self):
+        """Test user blocking and unblocking"""
+        logger.info("🚀 Starting User Blocking System Tests")
+        
+        # Create two test users
+        success, user1_data = self.create_test_user("male", "female", 1)
+        if not success:
+            logger.error("❌ Failed to create User 1")
+            return False
+        
+        success, user2_data = self.create_test_user("female", "male", 2)
+        if not success:
+            logger.error("❌ Failed to create User 2")
+            return False
+        
+        # Set up profiles
+        if not self.setup_user_profile(user1_data) or not self.setup_user_profile(user2_data):
+            logger.error("❌ Failed to set up user profiles")
+            return False
+        
+        user1_headers = {'Authorization': f'Bearer {user1_data["token"]}'}
+        user2_headers = {'Authorization': f'Bearer {user2_data["token"]}'}
+        
+        # Test 1: Get initial blocked users list (should be empty)
+        success, response = self.run_test(
+            "Get Initial Blocked Users",
+            "GET",
+            "users/blocked",
+            200,
+            headers=user1_headers
+        )
+        
+        if success:
+            blocked_users = response.get('blocked_users', [])
+            logger.info(f"Initial blocked users count: {len(blocked_users)}")
+        
+        # Test 2: Block User 2
+        block_data = {
+            "user_id": user2_data["user_id"],
+            "reason": "Testing block functionality"
+        }
+        
+        success, response = self.run_test(
+            "Block User 2",
+            "POST",
+            f"users/{user2_data['user_id']}/block",
+            200,
+            data=block_data,
+            headers=user1_headers
+        )
+        
+        if success:
+            logger.info("✅ User blocked successfully")
+        
+        # Test 3: Get blocked users list after blocking
+        success, response = self.run_test(
+            "Get Blocked Users After Blocking",
+            "GET",
+            "users/blocked",
+            200,
+            headers=user1_headers
+        )
+        
+        if success:
+            blocked_users = response.get('blocked_users', [])
+            logger.info(f"Blocked users count after blocking: {len(blocked_users)}")
+        
+        # Test 4: Try to block yourself (should fail)
+        success, response = self.run_test(
+            "Try to Block Yourself",
+            "POST",
+            f"users/{user1_data['user_id']}/block",
+            400,  # Should fail
+            data={"user_id": user1_data["user_id"]},
+            headers=user1_headers
+        )
+        
+        if success:
+            logger.info("✅ Self-blocking correctly rejected")
+        
+        # Test 5: Test discover endpoint filters blocked users
+        success, response = self.run_test(
+            "Test Discover Filters Blocked Users",
+            "GET",
+            "discover",
+            200,
+            headers=user1_headers
+        )
+        
+        if success:
+            users = response.get('users', [])
+            blocked_user_found = any(user['id'] == user2_data['user_id'] for user in users)
+            if not blocked_user_found:
+                logger.info("✅ Blocked user correctly filtered from discover")
+            else:
+                logger.error("❌ Blocked user still appears in discover")
+        
+        # Test 6: Unblock User 2
+        success, response = self.run_test(
+            "Unblock User 2",
+            "POST",
+            f"users/{user2_data['user_id']}/unblock",
+            200,
+            headers=user1_headers
+        )
+        
+        if success:
+            logger.info("✅ User unblocked successfully")
+        
+        # Test 7: Get blocked users list after unblocking
+        success, response = self.run_test(
+            "Get Blocked Users After Unblocking",
+            "GET",
+            "users/blocked",
+            200,
+            headers=user1_headers
+        )
+        
+        if success:
+            blocked_users = response.get('blocked_users', [])
+            logger.info(f"Blocked users count after unblocking: {len(blocked_users)}")
+        
+        logger.info("✅ User Blocking System tests completed")
+        return True
+    
+    def test_user_reporting_system(self):
+        """Test user reporting functionality"""
+        logger.info("🚀 Starting User Reporting System Tests")
+        
+        # Create two test users
+        success, user1_data = self.create_test_user("male", "female", 1)
+        if not success:
+            logger.error("❌ Failed to create User 1")
+            return False
+        
+        success, user2_data = self.create_test_user("female", "male", 2)
+        if not success:
+            logger.error("❌ Failed to create User 2")
+            return False
+        
+        # Set up profiles
+        if not self.setup_user_profile(user1_data) or not self.setup_user_profile(user2_data):
+            logger.error("❌ Failed to set up user profiles")
+            return False
+        
+        user1_headers = {'Authorization': f'Bearer {user1_data["token"]}'}
+        
+        # Test 1: Get initial reports (should be empty)
+        success, response = self.run_test(
+            "Get Initial User Reports",
+            "GET",
+            "users/reports",
+            200,
+            headers=user1_headers
+        )
+        
+        if success:
+            reports = response.get('reports', [])
+            logger.info(f"Initial reports count: {len(reports)}")
+        
+        # Test 2: Report user for harassment
+        report_data = {
+            "reported_user_id": user2_data["user_id"],
+            "category": "harassment",
+            "description": "This user sent inappropriate messages and made me uncomfortable during our conversation.",
+            "evidence_photos": []
+        }
+        
+        success, response = self.run_test(
+            "Report User for Harassment",
+            "POST",
+            f"users/{user2_data['user_id']}/report",
+            200,
+            data=report_data,
+            headers=user1_headers
+        )
+        
+        if success:
+            report_id = response.get('report_id')
+            logger.info(f"✅ User reported successfully - Report ID: {report_id}")
+        
+        # Test 3: Report user for fake profile
+        report_data_2 = {
+            "reported_user_id": user2_data["user_id"],
+            "category": "fake_profile",
+            "description": "This user's photos don't match their appearance in person. Suspected fake profile.",
+            "evidence_photos": ["mock_base64_evidence_photo"]
+        }
+        
+        success, response = self.run_test(
+            "Report User for Fake Profile",
+            "POST",
+            f"users/{user2_data['user_id']}/report",
+            200,
+            data=report_data_2,
+            headers=user1_headers
+        )
+        
+        if success:
+            report_id = response.get('report_id')
+            logger.info(f"✅ User reported for fake profile - Report ID: {report_id}")
+        
+        # Test 4: Test all report categories
+        categories = ["inappropriate_content", "spam", "violent_content", "underage", "scam", "other"]
+        
+        for category in categories:
+            report_data_cat = {
+                "reported_user_id": user2_data["user_id"],
+                "category": category,
+                "description": f"Testing report category: {category}. This is a test report to verify the system handles different categories correctly.",
+                "evidence_photos": []
+            }
+            
+            success, response = self.run_test(
+                f"Report User for {category}",
+                "POST",
+                f"users/{user2_data['user_id']}/report",
+                200,
+                data=report_data_cat,
+                headers=user1_headers
+            )
+            
+            if success:
+                logger.info(f"✅ Report category '{category}' working")
+        
+        # Test 5: Try to report yourself (should fail)
+        success, response = self.run_test(
+            "Try to Report Yourself",
+            "POST",
+            f"users/{user1_data['user_id']}/report",
+            400,  # Should fail
+            data={
+                "reported_user_id": user1_data["user_id"],
+                "category": "harassment",
+                "description": "Testing self-report"
+            },
+            headers=user1_headers
+        )
+        
+        if success:
+            logger.info("✅ Self-reporting correctly rejected")
+        
+        # Test 6: Get reports after reporting
+        success, response = self.run_test(
+            "Get User Reports After Reporting",
+            "GET",
+            "users/reports",
+            200,
+            headers=user1_headers
+        )
+        
+        if success:
+            reports = response.get('reports', [])
+            logger.info(f"Reports count after reporting: {len(reports)}")
+        
+        logger.info("✅ User Reporting System tests completed")
+        return True
+    
+    def test_safety_center(self):
+        """Test safety center functionality"""
+        logger.info("🚀 Starting Safety Center Tests")
+        
+        # Create a test user
+        success, user_data = self.create_test_user("female", "male", 1)
+        if not success:
+            logger.error("❌ Failed to create test user")
+            return False
+        
+        headers = {'Authorization': f'Bearer {user_data["token"]}'}
+        
+        # Test 1: Get safety tips
+        success, response = self.run_test(
+            "Get Safety Tips",
+            "GET",
+            "safety/tips",
+            200
+        )
+        
+        if success:
+            tips = response.get('tips', [])
+            logger.info(f"✅ Retrieved {len(tips)} safety tips")
+            if tips:
+                logger.info(f"Sample tip: {tips[0].get('title', 'No title')}")
+        
+        # Test 2: Get initial safety preferences
+        success, response = self.run_test(
+            "Get Initial Safety Preferences",
+            "GET",
+            "safety/preferences",
+            200,
+            headers=headers
+        )
+        
+        if success:
+            preferences = response.get('safety_preferences', {})
+            logger.info(f"Initial safety preferences: {preferences}")
+        
+        # Test 3: Update safety preferences
+        safety_preferences = {
+            "emergency_contact": {
+                "name": "Emma Johnson",
+                "phone": "+1-555-0123",
+                "relationship": "Sister"
+            },
+            "share_location": True,
+            "show_distance": True,
+            "verified_only": False,
+            "enable_panic_button": True
+        }
+        
+        success, response = self.run_test(
+            "Update Safety Preferences",
+            "POST",
+            "safety/preferences",
+            200,
+            data=safety_preferences,
+            headers=headers
+        )
+        
+        if success:
+            logger.info("✅ Safety preferences updated successfully")
+        
+        # Test 4: Get safety preferences after update
+        success, response = self.run_test(
+            "Get Safety Preferences After Update",
+            "GET",
+            "safety/preferences",
+            200,
+            headers=headers
+        )
+        
+        if success:
+            preferences = response.get('safety_preferences', {})
+            emergency_contact = response.get('emergency_contact')
+            logger.info(f"Updated safety preferences: {preferences}")
+            logger.info(f"Emergency contact: {emergency_contact}")
+        
+        # Test 5: Trigger panic button
+        success, response = self.run_test(
+            "Trigger Panic Button",
+            "POST",
+            "safety/panic",
+            200,
+            headers=headers
+        )
+        
+        if success:
+            message = response.get('message')
+            contact_notified = response.get('emergency_contact_notified')
+            logger.info(f"✅ Panic button triggered - Contact notified: {contact_notified}")
+        
+        # Test 6: Get safety statistics
+        success, response = self.run_test(
+            "Get Safety Statistics",
+            "GET",
+            "safety/stats",
+            200
+        )
+        
+        if success:
+            stats = response
+            logger.info(f"✅ Safety statistics: {stats}")
+        
+        logger.info("✅ Safety Center tests completed")
+        return True
+    
+    def test_safety_tips_database(self):
+        """Test safety tips database initialization"""
+        logger.info("🚀 Starting Safety Tips Database Tests")
+        
+        # Test 1: Get safety tips (should be initialized on startup)
+        success, response = self.run_test(
+            "Get Safety Tips from Database",
+            "GET",
+            "safety/tips",
+            200
+        )
+        
+        if success:
+            tips = response.get('tips', [])
+            logger.info(f"✅ Retrieved {len(tips)} safety tips from database")
+            
+            # Verify expected tip categories
+            categories = set()
+            for tip in tips:
+                categories.add(tip.get('category', 'unknown'))
+            
+            expected_categories = ['meeting_safety', 'personal_safety', 'online_safety', 'privacy', 'reporting']
+            found_categories = categories.intersection(expected_categories)
+            
+            logger.info(f"Found tip categories: {list(categories)}")
+            logger.info(f"Expected categories found: {list(found_categories)}")
+            
+            # Check for specific important tips
+            tip_titles = [tip.get('title', '') for tip in tips]
+            important_tips = [
+                "Meet in Public Places",
+                "Tell Someone Your Plans", 
+                "Trust Your Instincts",
+                "Report Suspicious Behavior"
+            ]
+            
+            found_important = [tip for tip in important_tips if any(tip in title for title in tip_titles)]
+            logger.info(f"Important safety tips found: {found_important}")
+            
+            if len(tips) >= 5 and len(found_categories) >= 3:
+                logger.info("✅ Safety tips database properly initialized")
+            else:
+                logger.error("❌ Safety tips database not properly initialized")
+                return False
+        else:
+            logger.error("❌ Failed to retrieve safety tips")
+            return False
+        
+        logger.info("✅ Safety Tips Database tests completed")
+        return True
+    
+    def run_safety_tests(self):
+        """Run all safety-related tests"""
+        logger.info("🚀 Starting Safety Features Tests")
+        
+        safety_tests = [
+            ("Photo Verification System", self.test_photo_verification_system),
+            ("User Blocking System", self.test_user_blocking_system),
+            ("User Reporting System", self.test_user_reporting_system),
+            ("Safety Center", self.test_safety_center),
+            ("Safety Tips Database", self.test_safety_tips_database)
+        ]
+        
+        results = {}
+        
+        for test_name, test_method in safety_tests:
+            logger.info(f"\n{'='*60}")
+            logger.info(f"Running {test_name} Tests")
+            logger.info(f"{'='*60}")
+            
+            try:
+                result = test_method()
+                results[test_name] = result
+                if result:
+                    logger.info(f"✅ {test_name} tests PASSED")
+                else:
+                    logger.error(f"❌ {test_name} tests FAILED")
+            except Exception as e:
+                logger.error(f"❌ {test_name} tests FAILED with exception: {str(e)}")
+                results[test_name] = False
+        
+        # Print summary
+        logger.info(f"\n{'='*60}")
+        logger.info("SAFETY FEATURES TEST SUMMARY")
+        logger.info(f"{'='*60}")
+        
+        passed = 0
+        total = len(results)
+        
+        for test_name, result in results.items():
+            status = "✅ PASSED" if result else "❌ FAILED"
+            logger.info(f"{test_name}: {status}")
+            if result:
+                passed += 1
+        
+        logger.info(f"\nOverall: {passed}/{total} safety feature tests passed")
+        logger.info(f"📊 Total API tests: {self.tests_passed}/{self.tests_run}")
+        
+        return passed == total
+    
     def run_all_tests(self):
         """Run all tests in sequence"""
         logger.info("🚀 Starting Dating App API Tests")
@@ -1005,7 +1550,14 @@ class DatingAppTester:
             logger.error("❌ Resend verification test failed")
             # Continue with other tests
         
-        # Test 9: Test WebSocket Connection
+        # Test 9: Run Safety Features Tests
+        logger.info("\n" + "="*80)
+        logger.info("STARTING SAFETY FEATURES TESTING")
+        logger.info("="*80)
+        
+        safety_success = self.run_safety_tests()
+        
+        # Test 10: Test WebSocket Connection
         # Create a test user with complete profile
         success, user_data = self.create_test_user("male", "female", 1)
         if success:
@@ -1026,7 +1578,9 @@ class DatingAppTester:
         
         # Print results
         logger.info(f"\n📊 Tests passed: {self.tests_passed}/{self.tests_run}")
-        return self.tests_passed == self.tests_run
+        logger.info(f"🔒 Safety features: {'✅ PASSED' if safety_success else '❌ FAILED'}")
+        
+        return self.tests_passed == self.tests_run and safety_success
 
 if __name__ == "__main__":
     tester = DatingAppTester()
