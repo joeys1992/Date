@@ -273,6 +273,66 @@ backend:
         agent: "testing"
         comment: "Distance display is properly implemented. The API correctly includes calculated distances in the discover endpoint results. Distances are rounded to one decimal place for better readability."
 
+  - task: "Photo Verification System"
+    implemented: true
+    working: false
+    file: "server.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+      - working: false
+        agent: "main"
+        comment: "Added photo verification endpoint with face comparison, auto-approval logic, and verification status tracking. Users can submit selfies for verification."
+
+  - task: "User Blocking System"
+    implemented: true
+    working: false
+    file: "server.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+      - working: false
+        agent: "main"
+        comment: "Added user blocking/unblocking endpoints. Updated discover endpoint to filter out blocked users. Mutual blocks remove existing matches."
+
+  - task: "User Reporting System"
+    implemented: true
+    working: false
+    file: "server.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+      - working: false
+        agent: "main"
+        comment: "Added user reporting with categories (harassment, fake profile, etc.), evidence photo upload, and report tracking system."
+
+  - task: "Safety Center API"
+    implemented: true
+    working: false
+    file: "server.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+      - working: false
+        agent: "main"
+        comment: "Added safety center with tips, preferences, panic button, and safety statistics. Includes emergency contact management."
+
+  - task: "Safety Tips Database"
+    implemented: true
+    working: false
+    file: "server.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+      - working: false
+        agent: "main"
+        comment: "Added safety tips initialization with comprehensive dating safety guidance including meeting safety, privacy, and reporting."
+
 frontend:
   - task: "Messages tab in navigation"
     implemented: true
