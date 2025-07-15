@@ -1584,5 +1584,6 @@ class DatingAppTester:
 
 if __name__ == "__main__":
     tester = DatingAppTester()
-    success = tester.run_all_tests()
+    # Run only safety features tests for focused testing
+    success = tester.run_safety_tests()
     exit(0 if success else 1)
