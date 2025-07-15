@@ -256,6 +256,14 @@ class User(BaseModel):
     profile_views: List[str] = []  # Who viewed this profile
     is_verified: bool = False
     email_verified: bool = False
+    photo_verified: bool = False  # Photo verification status
+    photo_verification_status: VerificationStatus = VerificationStatus.PENDING
+    blocked_users: List[str] = []  # Users this user has blocked
+    blocked_by_users: List[str] = []  # Users who have blocked this user
+    reports_made: List[str] = []  # Report IDs made by this user
+    reports_received: List[str] = []  # Report IDs against this user
+    emergency_contact: Optional[str] = None  # Emergency contact phone
+    safety_preferences: Dict[str, Any] = {}  # Safety settings
     created_at: datetime = Field(default_factory=datetime.utcnow)
     verified_at: Optional[datetime] = None
     last_active: datetime = Field(default_factory=datetime.utcnow)
