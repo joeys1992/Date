@@ -300,6 +300,76 @@ class MessageRequest(BaseModel):
     message_type: str = "text"
     response_to_question: Optional[int] = None  # Required for first message
 
+# Photo Verification Models
+class PhotoVerificationRequest(BaseModel):
+    verification_photo: str  # base64 encoded image
+
+class PhotoVerificationResponse(BaseModel):
+    verification_id: str
+    status: VerificationStatus
+    submitted_at: datetime
+    reviewed_at: Optional[datetime] = None
+    reviewer_notes: Optional[str] = None
+
+class PhotoVerification(BaseModel):
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    user_id: str
+    verification_photo: str  # base64 encoded selfie
+    status: VerificationStatus = VerificationStatus.SUBMITTED
+    submitted_at: datetime = Field(default_factory=datetime.utcnow)
+    reviewed_at: Optional[datetime] = None
+    reviewed_by: Optional[str] = None  # Admin user ID
+    reviewer_notes: Optional[str] = None
+    similarity_score: Optional[float] = None  # If using face comparison
+
+# User Report Models
+class UserReportRequest(BaseModel):
+    reported_user_id: str
+    category: ReportCategory
+    description: str
+    evidence_photos: List[str] = []  # base64 encoded images
+
+class UserReport(BaseModel):
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    reporter_id: str
+    reported_user_id: str
+    category: ReportCategory
+    description: str
+    evidence_photos: List[str] = []
+    status: ReportStatus = ReportStatus.PENDING
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+    reviewed_at: Optional[datetime] = None
+    reviewed_by: Optional[str] = None  # Admin user ID
+    reviewer_notes: Optional[str] = None
+    action_taken: Optional[str] = None
+
+# Block User Model
+class BlockUserRequest(BaseModel):
+    user_id: str
+    reason: Optional[str] = None
+
+# Safety Center Models
+class SafetyTip(BaseModel):
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    title: str
+    content: str
+    category: str
+    priority: int = 1
+    active: bool = True
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+
+class EmergencyContact(BaseModel):
+    name: str
+    phone: str
+    relationship: str
+
+class SafetyPreferences(BaseModel):
+    emergency_contact: Optional[EmergencyContact] = None
+    share_location: bool = False
+    show_distance: bool = True
+    verified_only: bool = False
+    enable_panic_button: bool = False
+
 # WebSocket connection manager
 class ConnectionManager:
     def __init__(self):
