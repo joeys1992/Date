@@ -1201,6 +1201,9 @@ const MainView = ({ token, currentUser, onLogout }) => {
                     <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/70 to-transparent p-4">
                       <h2 className="text-white text-xl font-bold">
                         {currentDisplayUser.first_name}, {currentDisplayUser.age}
+                        {currentDisplayUser.photo_verified && (
+                          <span className="ml-2 text-blue-400" title="Verified">✅</span>
+                        )}
                       </h2>
                       {currentDisplayUser.location && (
                         <p className="text-white/80 text-sm">
