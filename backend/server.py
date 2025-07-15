@@ -479,6 +479,50 @@ def can_users_match(user1: dict, user2: dict) -> bool:
     
     return user1_wants_user2 and user2_wants_user1
 
+def is_user_blocked(user1_id: str, user2_id: str, user1_data: dict, user2_data: dict) -> bool:
+    """Check if either user has blocked the other"""
+    # Check if user1 has blocked user2
+    if user2_id in user1_data.get("blocked_users", []):
+        return True
+    
+    # Check if user2 has blocked user1
+    if user1_id in user2_data.get("blocked_users", []):
+        return True
+    
+    return False
+
+async def filter_blocked_users(current_user_id: str, user_list: List[dict]) -> List[dict]:
+    """Filter out blocked users from a list of users"""
+    current_user = await db.users.find_one({"id": current_user_id})
+    if not current_user:
+        return user_list
+    
+    blocked_users = current_user.get("blocked_users", [])
+    blocked_by_users = current_user.get("blocked_by_users", [])
+    
+    # Filter out users who are blocked or have blocked the current user
+    filtered_users = []
+    for user in user_list:
+        user_id = user.get("id")
+        if user_id not in blocked_users and user_id not in blocked_by_users:
+            filtered_users.append(user)
+    
+    return filtered_users
+
+def compare_faces(profile_photo: str, verification_photo: str) -> float:
+    """
+    Mock face comparison function - returns a similarity score between 0 and 1.
+    In production, this would use a proper face recognition service like AWS Rekognition
+    """
+    # Mock implementation - in production, use actual face comparison
+    # For now, return a random score between 0.7 and 0.95 to simulate verification
+    import random
+    return random.uniform(0.7, 0.95)
+
+def should_auto_approve_verification(similarity_score: float) -> bool:
+    """Determine if photo verification should be auto-approved based on similarity score"""
+    return similarity_score >= 0.85  # 85% similarity threshold for auto-approval
+
 # API Routes
 @api_router.post("/register")
 async def register(
