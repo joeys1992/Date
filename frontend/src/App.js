@@ -1111,6 +1111,58 @@ const MainView = ({ token, currentUser, onLogout }) => {
     setShowProfileDetail(false);
   };
 
+  const blockUser = async (userId) => {
+    if (!confirm('Are you sure you want to block this user? They will no longer appear in your discover feed.')) {
+      return;
+    }
+
+    try {
+      await axios.post(`${API}/users/${userId}/block`, {
+        user_id: userId,
+        reason: 'Blocked from discover'
+      }, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      
+      alert('User blocked successfully');
+      setCurrentUserIndex(currentUserIndex + 1);
+      setShowProfileDetail(false);
+    } catch (err) {
+      alert(err.response?.data?.detail || 'Failed to block user');
+    }
+  };
+
+  const reportUser = async (userId) => {
+    const categories = [
+      { value: 'harassment', label: 'Harassment' },
+      { value: 'fake_profile', label: 'Fake Profile' },
+      { value: 'inappropriate_content', label: 'Inappropriate Content' },
+      { value: 'spam', label: 'Spam' },
+      { value: 'other', label: 'Other' }
+    ];
+
+    const category = prompt(`Report this user for:\n${categories.map((c, i) => `${i + 1}. ${c.label}`).join('\n')}\n\nEnter 1-5:`);
+    if (!category || category < 1 || category > 5) return;
+
+    const description = prompt('Please describe the issue:');
+    if (!description) return;
+
+    try {
+      await axios.post(`${API}/users/${userId}/report`, {
+        reported_user_id: userId,
+        category: categories[category - 1].value,
+        description: description,
+        evidence_photos: []
+      }, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      
+      alert('Report submitted successfully. Our team will review it shortly.');
+    } catch (err) {
+      alert(err.response?.data?.detail || 'Failed to report user');
+    }
+  };
+
   const currentDisplayUser = users[currentUserIndex];
 
   return (
