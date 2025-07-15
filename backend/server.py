@@ -815,8 +815,11 @@ async def discover_users(
     if not current_user:
         raise HTTPException(status_code=404, detail="User not found")
     
-    # Get users to exclude (already liked + self)
+    # Get users to exclude (already liked + self + blocked users)
     exclude_ids = current_user.get("likes_given", []) + [current_user_id]
+    blocked_users = current_user.get("blocked_users", [])
+    blocked_by_users = current_user.get("blocked_by_users", [])
+    exclude_ids.extend(blocked_users + blocked_by_users)
     
     # Find all potential matches first (must have photos and answers)
     cursor = db.users.find({
