@@ -305,15 +305,18 @@ backend:
 
   - task: "User Reporting System"
     implemented: true
-    working: false
+    working: true
     file: "server.py"
     stuck_count: 0
     priority: "high"
-    needs_retesting: true
+    needs_retesting: false
     status_history:
       - working: false
         agent: "main"
         comment: "Added user reporting with categories (harassment, fake profile, etc.), evidence photo upload, and report tracking system."
+      - working: true
+        agent: "testing"
+        comment: "User reporting system is fully functional. POST /api/users/{user_id}/report works with all 8 categories: harassment, fake_profile, inappropriate_content, spam, violent_content, underage, scam, other. Evidence photo upload supported via base64. GET /api/users/reports returns user's reports. Self-reporting properly rejected with 400 error. Report tracking and user record updates working correctly."
 
   - task: "Safety Center API"
     implemented: true
