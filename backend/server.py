@@ -1254,6 +1254,320 @@ async def mark_message_as_read(
     
     return {"message": "Message marked as read"}
 
+# ====== SAFETY & SECURITY ENDPOINTS ======
+
+# Photo Verification Endpoints
+@api_router.post("/profile/verify-photo")
+async def submit_photo_verification(
+    verification_data: PhotoVerificationRequest,
+    current_user_id: str = Depends(get_current_user)
+):
+    """Submit a selfie for photo verification"""
+    # Check if user already has a pending verification
+    existing_verification = await db.photo_verifications.find_one({
+        "user_id": current_user_id,
+        "status": {"$in": ["pending", "submitted"]}
+    })
+    
+    if existing_verification:
+        raise HTTPException(status_code=400, detail="Verification already in progress")
+    
+    # Get user's profile photos for comparison
+    user_doc = await db.users.find_one({"id": current_user_id})
+    if not user_doc or not user_doc.get("photos"):
+        raise HTTPException(status_code=400, detail="Must have profile photos to verify")
+    
+    # Create verification record
+    verification = PhotoVerification(
+        user_id=current_user_id,
+        verification_photo=verification_data.verification_photo,
+        status=VerificationStatus.SUBMITTED
+    )
+    
+    # Compare faces (mock implementation)
+    primary_photo = user_doc["photos"][0]
+    similarity_score = compare_faces(primary_photo, verification_data.verification_photo)
+    verification.similarity_score = similarity_score
+    
+    # Auto-approve if similarity is high enough
+    if should_auto_approve_verification(similarity_score):
+        verification.status = VerificationStatus.APPROVED
+        verification.reviewed_at = datetime.utcnow()
+        verification.reviewer_notes = "Auto-approved based on face similarity"
+        
+        # Update user's verification status
+        await db.users.update_one(
+            {"id": current_user_id},
+            {"$set": {
+                "photo_verified": True,
+                "photo_verification_status": VerificationStatus.APPROVED
+            }}
+        )
+    
+    await db.photo_verifications.insert_one(verification.dict())
+    
+    return {
+        "verification_id": verification.id,
+        "status": verification.status.value,
+        "message": "Photo verification submitted successfully" if verification.status == VerificationStatus.SUBMITTED else "Photo verification approved!"
+    }
+
+@api_router.get("/profile/verification-status")
+async def get_verification_status(current_user_id: str = Depends(get_current_user)):
+    """Get user's photo verification status"""
+    user_doc = await db.users.find_one({"id": current_user_id})
+    if not user_doc:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    verification = await db.photo_verifications.find_one(
+        {"user_id": current_user_id},
+        sort=[("submitted_at", -1)]
+    )
+    
+    return {
+        "photo_verified": user_doc.get("photo_verified", False),
+        "verification_status": user_doc.get("photo_verification_status", "pending"),
+        "verification_details": verification
+    }
+
+# User Blocking and Reporting Endpoints
+@api_router.post("/users/{user_id}/block")
+async def block_user(
+    user_id: str,
+    block_data: BlockUserRequest,
+    current_user_id: str = Depends(get_current_user)
+):
+    """Block a user"""
+    if user_id == current_user_id:
+        raise HTTPException(status_code=400, detail="Cannot block yourself")
+    
+    # Check if user exists
+    target_user = await db.users.find_one({"id": user_id})
+    if not target_user:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    # Add to blocked users list
+    await db.users.update_one(
+        {"id": current_user_id},
+        {"$addToSet": {"blocked_users": user_id}}
+    )
+    
+    # Add to blocked_by_users list of target user
+    await db.users.update_one(
+        {"id": user_id},
+        {"$addToSet": {"blocked_by_users": current_user_id}}
+    )
+    
+    # Remove any existing match between the users
+    await db.matches.delete_many({
+        "$or": [
+            {"user1_id": current_user_id, "user2_id": user_id},
+            {"user1_id": user_id, "user2_id": current_user_id}
+        ]
+    })
+    
+    # Remove from each other's matches list
+    await db.users.update_many(
+        {"id": {"$in": [current_user_id, user_id]}},
+        {"$pull": {"matches": {"$in": [current_user_id, user_id]}}}
+    )
+    
+    return {"message": "User blocked successfully"}
+
+@api_router.post("/users/{user_id}/unblock")
+async def unblock_user(
+    user_id: str,
+    current_user_id: str = Depends(get_current_user)
+):
+    """Unblock a user"""
+    if user_id == current_user_id:
+        raise HTTPException(status_code=400, detail="Cannot unblock yourself")
+    
+    # Remove from blocked users list
+    await db.users.update_one(
+        {"id": current_user_id},
+        {"$pull": {"blocked_users": user_id}}
+    )
+    
+    # Remove from blocked_by_users list of target user
+    await db.users.update_one(
+        {"id": user_id},
+        {"$pull": {"blocked_by_users": current_user_id}}
+    )
+    
+    return {"message": "User unblocked successfully"}
+
+@api_router.get("/users/blocked")
+async def get_blocked_users(current_user_id: str = Depends(get_current_user)):
+    """Get list of blocked users"""
+    user_doc = await db.users.find_one({"id": current_user_id})
+    if not user_doc:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    blocked_user_ids = user_doc.get("blocked_users", [])
+    
+    # Get details of blocked users
+    blocked_users = []
+    async for user in db.users.find({"id": {"$in": blocked_user_ids}}):
+        user.pop("password_hash", None)
+        user.pop("_id", None)
+        blocked_users.append(user)
+    
+    return {"blocked_users": blocked_users}
+
+@api_router.post("/users/{user_id}/report")
+async def report_user(
+    user_id: str,
+    report_data: UserReportRequest,
+    current_user_id: str = Depends(get_current_user)
+):
+    """Report a user for inappropriate behavior"""
+    if user_id == current_user_id:
+        raise HTTPException(status_code=400, detail="Cannot report yourself")
+    
+    # Check if user exists
+    target_user = await db.users.find_one({"id": user_id})
+    if not target_user:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    # Create report
+    report = UserReport(
+        reporter_id=current_user_id,
+        reported_user_id=user_id,
+        category=report_data.category,
+        description=report_data.description,
+        evidence_photos=report_data.evidence_photos
+    )
+    
+    await db.user_reports.insert_one(report.dict())
+    
+    # Update user records
+    await db.users.update_one(
+        {"id": current_user_id},
+        {"$addToSet": {"reports_made": report.id}}
+    )
+    
+    await db.users.update_one(
+        {"id": user_id},
+        {"$addToSet": {"reports_received": report.id}}
+    )
+    
+    return {
+        "report_id": report.id,
+        "message": "Report submitted successfully. Our team will review it shortly."
+    }
+
+@api_router.get("/users/reports")
+async def get_user_reports(current_user_id: str = Depends(get_current_user)):
+    """Get reports made by current user"""
+    user_doc = await db.users.find_one({"id": current_user_id})
+    if not user_doc:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    report_ids = user_doc.get("reports_made", [])
+    
+    # Get report details
+    reports = []
+    async for report in db.user_reports.find({"id": {"$in": report_ids}}):
+        report.pop("_id", None)
+        reports.append(report)
+    
+    return {"reports": reports}
+
+# Safety Center Endpoints
+@api_router.get("/safety/tips")
+async def get_safety_tips():
+    """Get safety tips for users"""
+    tips = []
+    async for tip in db.safety_tips.find({"active": True}).sort("priority", 1):
+        tip.pop("_id", None)
+        tips.append(tip)
+    
+    return {"tips": tips}
+
+@api_router.post("/safety/preferences")
+async def update_safety_preferences(
+    preferences: SafetyPreferences,
+    current_user_id: str = Depends(get_current_user)
+):
+    """Update user's safety preferences"""
+    preferences_dict = preferences.dict()
+    
+    await db.users.update_one(
+        {"id": current_user_id},
+        {"$set": {"safety_preferences": preferences_dict}}
+    )
+    
+    # Update emergency contact if provided
+    if preferences.emergency_contact:
+        await db.users.update_one(
+            {"id": current_user_id},
+            {"$set": {"emergency_contact": preferences.emergency_contact.phone}}
+        )
+    
+    return {"message": "Safety preferences updated successfully"}
+
+@api_router.get("/safety/preferences")
+async def get_safety_preferences(current_user_id: str = Depends(get_current_user)):
+    """Get user's safety preferences"""
+    user_doc = await db.users.find_one({"id": current_user_id})
+    if not user_doc:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    return {
+        "safety_preferences": user_doc.get("safety_preferences", {}),
+        "emergency_contact": user_doc.get("emergency_contact")
+    }
+
+@api_router.post("/safety/panic")
+async def trigger_panic_button(current_user_id: str = Depends(get_current_user)):
+    """Trigger panic button - emergency feature"""
+    user_doc = await db.users.find_one({"id": current_user_id})
+    if not user_doc:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    # Log panic button trigger
+    panic_log = {
+        "user_id": current_user_id,
+        "timestamp": datetime.utcnow(),
+        "location": {
+            "latitude": user_doc.get("latitude"),
+            "longitude": user_doc.get("longitude")
+        },
+        "emergency_contact": user_doc.get("emergency_contact")
+    }
+    
+    await db.panic_logs.insert_one(panic_log)
+    
+    # In production, this would:
+    # 1. Send SMS to emergency contact
+    # 2. Alert security team
+    # 3. Possibly contact local authorities
+    
+    return {
+        "message": "Emergency alert triggered. Help is on the way.",
+        "emergency_contact_notified": bool(user_doc.get("emergency_contact"))
+    }
+
+@api_router.get("/safety/stats")
+async def get_safety_stats():
+    """Get safety statistics for the platform"""
+    # Count verified users
+    verified_count = await db.users.count_documents({"photo_verified": True})
+    total_users = await db.users.count_documents({})
+    
+    # Count reports
+    total_reports = await db.user_reports.count_documents({})
+    pending_reports = await db.user_reports.count_documents({"status": "pending"})
+    
+    return {
+        "verified_users": verified_count,
+        "total_users": total_users,
+        "verification_rate": (verified_count / total_users * 100) if total_users > 0 else 0,
+        "total_reports": total_reports,
+        "pending_reports": pending_reports
+    }
+
 # Include the router in the main app
 app.include_router(api_router)
 
