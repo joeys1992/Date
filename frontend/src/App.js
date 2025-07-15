@@ -1220,6 +1220,22 @@ const MainView = ({ token, currentUser, onLogout }) => {
                     >
                       ℹ️
                     </button>
+                    <div className="absolute top-4 left-4 flex space-x-2">
+                      <button
+                        onClick={() => reportUser(currentDisplayUser.id)}
+                        className="bg-red-500/80 backdrop-blur-sm text-white p-2 rounded-full text-sm"
+                        title="Report User"
+                      >
+                        ⚠️
+                      </button>
+                      <button
+                        onClick={() => blockUser(currentDisplayUser.id)}
+                        className="bg-gray-500/80 backdrop-blur-sm text-white p-2 rounded-full text-sm"
+                        title="Block User"
+                      >
+                        🚫
+                      </button>
+                    </div>
                   </div>
                 ) : (
                   // Full Profile Detail
