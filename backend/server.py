@@ -56,6 +56,29 @@ class GenderPreference(str, Enum):
     FEMALE = "female"
     BOTH = "both"
 
+# Safety-related Enums
+class VerificationStatus(str, Enum):
+    PENDING = "pending"
+    APPROVED = "approved"
+    REJECTED = "rejected"
+    SUBMITTED = "submitted"
+
+class ReportCategory(str, Enum):
+    INAPPROPRIATE_CONTENT = "inappropriate_content"
+    FAKE_PROFILE = "fake_profile"
+    HARASSMENT = "harassment"
+    SPAM = "spam"
+    VIOLENT_CONTENT = "violent_content"
+    UNDERAGE = "underage"
+    SCAM = "scam"
+    OTHER = "other"
+
+class ReportStatus(str, Enum):
+    PENDING = "pending"
+    UNDER_REVIEW = "under_review"
+    RESOLVED = "resolved"
+    DISMISSED = "dismissed"
+
 # Profile Questions - 28 deep questions for users to answer
 PROFILE_QUESTIONS = [
     # Personal Growth & Aspirations
