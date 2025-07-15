@@ -335,15 +335,18 @@ backend:
 
   - task: "Safety Tips Database"
     implemented: true
-    working: false
+    working: true
     file: "server.py"
     stuck_count: 0
     priority: "high"
-    needs_retesting: true
+    needs_retesting: false
     status_history:
       - working: false
         agent: "main"
         comment: "Added safety tips initialization with comprehensive dating safety guidance including meeting safety, privacy, and reporting."
+      - working: true
+        agent: "testing"
+        comment: "Safety Tips Database is properly initialized and working. 8 comprehensive safety tips covering 5 categories: meeting_safety, personal_safety, online_safety, privacy, and reporting. Important tips include 'Meet in Public Places', 'Tell Someone Your Plans', 'Trust Your Instincts', and 'Report Suspicious Behavior'. Tips are automatically initialized on startup and properly stored in MongoDB with active status and priority ordering."
 
 frontend:
   - task: "Messages tab in navigation"
