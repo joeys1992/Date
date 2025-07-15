@@ -290,15 +290,18 @@ backend:
 
   - task: "User Blocking System"
     implemented: true
-    working: false
+    working: true
     file: "server.py"
     stuck_count: 0
     priority: "high"
-    needs_retesting: true
+    needs_retesting: false
     status_history:
       - working: false
         agent: "main"
         comment: "Added user blocking/unblocking endpoints. Updated discover endpoint to filter out blocked users. Mutual blocks remove existing matches."
+      - working: true
+        agent: "testing"
+        comment: "User blocking system is fully functional. POST /api/users/{user_id}/block successfully blocks users with optional reason. POST /api/users/{user_id}/unblock removes blocks. GET /api/users/blocked returns blocked users list. Discover endpoint correctly filters out blocked users. Self-blocking is properly rejected with 400 error. Mutual blocks remove existing matches as expected."
 
   - task: "User Reporting System"
     implemented: true
