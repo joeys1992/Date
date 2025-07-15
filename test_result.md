@@ -593,9 +593,15 @@ metadata:
   run_ui: false
 
 test_plan:
-  current_focus: []
+  current_focus:
+    - "Safety Center UI Component"
+    - "Photo Verification UI"
+    - "Block and Report User Interface"
+    - "Safety Tips Display"
+    - "Verification Badges"
+    - "Panic Button Interface"
   stuck_tasks: []
-  test_all: false
+  test_all: true
   test_priority: "high_first"
 
 agent_communication:
