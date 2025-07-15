@@ -102,7 +102,7 @@
 # Testing Data - Main Agent and testing sub agent both should log testing data below this section
 #====================================================================================================
 
-user_problem_statement: "Set up the messaging service for DateConnect dating app and implement location settings with radius-based filtering"
+user_problem_statement: "Set up photo verification, then the ability to block and report users, then a safety centre for DateConnect dating app"
 
 backend:
   - task: "WebSocket real-time messaging support"
