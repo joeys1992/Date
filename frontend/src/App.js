@@ -1255,6 +1255,9 @@ const MainView = ({ token, currentUser, onLogout }) => {
                     <div className="p-4">
                       <h2 className="text-xl font-bold mb-2">
                         {currentDisplayUser.first_name}, {currentDisplayUser.age}
+                        {currentDisplayUser.photo_verified && (
+                          <span className="ml-2 text-blue-500" title="Verified">✅</span>
+                        )}
                       </h2>
                       <p className="text-gray-600 text-sm mb-4">
                         {currentDisplayUser.gender} • Looking for {currentDisplayUser.gender_preference}
